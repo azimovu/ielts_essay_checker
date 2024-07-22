@@ -1,0 +1,13 @@
+# Ignore log files
+*.log
+
+# But don't ignore important.log even if it's a log file
+!important.log
+
+# Ignore .env files
+.env
+
+
+*.pyc
+__pycache__/
+venv/
