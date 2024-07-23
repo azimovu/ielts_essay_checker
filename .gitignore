@@ -11,3 +11,6 @@
 *.pyc
 __pycache__/
 venv/
+
+# Ignore
+*.db
