@@ -3,6 +3,8 @@ from telegram.ext import ContextTypes
 from models.user import User
 import database
 from handlers.evaluate import handle_essay  # Import the handle_essay function
+from handlers.feedback import handle_feedback, process_feedback  # Import both feedback functions
+
 
 def get_user(user_id: int) -> User:
     """Get a user from the database."""
@@ -91,7 +93,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Show the main menu."""
     keyboard = [["Evaluate", "Feedback"], ["Check Remaining Uses"], ["Purchase More Uses"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text('Welcome! Please choose an option:', reply_markup=reply_markup)
+    await update.message.reply_text('Please choose an option:', reply_markup=reply_markup)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle user messages based on the current state."""
@@ -99,11 +101,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if await check_uses(update, context):
             await update.message.reply_text('Please provide the topic for evaluation.')
             context.user_data['state'] = 'waiting_for_topic'
-        # If check_uses returns False, it will have already prompted the user to purchase
     elif update.message.text == "Feedback":
-        # Assuming feedback doesn't use up an attempt
-        await update.message.reply_text('Please provide your feedback.')
-        context.user_data['state'] = 'waiting_for_feedback'
+        await handle_feedback(update, context)  # This will set the state to 'waiting_for_feedback'
     elif update.message.text == "Check Remaining Uses":
         await handle_check_remaining_uses(update, context)
     elif update.message.text == "Purchase More Uses":
@@ -117,14 +116,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text('Now, please send me the essay.')
         context.user_data['state'] = 'waiting_for_essay'
     elif context.user_data.get('state') == 'waiting_for_essay':
-        # Use the handle_essay function from evaluate.py
         await handle_essay(update, context)
         context.user_data['state'] = None
         await show_main_menu(update, context)
     elif context.user_data.get('state') == 'waiting_for_feedback':
-        # This is where you'd handle the feedback
-        await update.message.reply_text('Thank you for your feedback!')
-        context.user_data['state'] = None
+        await process_feedback(update, context)  # Process the feedback
         await show_main_menu(update, context)
     else:
         await update.message.reply_text("I'm sorry, I didn't understand that command. Please use the menu options.")
