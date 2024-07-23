@@ -1,6 +1,29 @@
 import sqlite3
 from sqlite3 import Error
 from config import DB_NAME
+def migrate_database():
+    conn = create_connection()
+    if conn is not None:
+        try:
+            cursor = conn.cursor()
+            # Check if the columns exist, if not, add them
+            cursor.execute("PRAGMA table_info(users)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'free_uses_left' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN free_uses_left INTEGER DEFAULT 3")
+            
+            if 'purchased_uses' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN purchased_uses INTEGER DEFAULT 0")
+            
+            conn.commit()
+            print("Database migration completed successfully.")
+        except Error as e:
+            print(f"Error during database migration: {e}")
+        finally:
+            conn.close()
+    else:
+        print("Error! Cannot create the database connection.")
 
 def create_connection():
     conn = None

@@ -1,8 +1,7 @@
 class User:
-    def __init__(self, id: int, phone_number: str, usage_count: int):
+    def __init__(self, id, phone_number, usage_count, free_uses_left, purchased_uses):
         self.id = id
         self.phone_number = phone_number
         self.usage_count = usage_count
-
-    def __str__(self):
-        return f"User(id={self.id}, phone_number={self.phone_number}, usage_count={self.usage_count})"
+        self.free_uses_left = free_uses_left
+        self.purchased_uses = purchased_uses

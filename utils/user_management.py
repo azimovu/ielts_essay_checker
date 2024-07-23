@@ -2,6 +2,41 @@ from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from models.user import User
 import database
+from handlers.evaluate import handle_essay  # Import the handle_essay function
+
+def get_user(user_id: int) -> User:
+    """Get a user from the database."""
+    user_data = database.get_user(user_id)
+    if user_data:
+        return User(id=user_data[0], 
+                    phone_number=user_data[1], 
+                    usage_count=user_data[2], 
+                    free_uses_left=user_data[3], 
+                    purchased_uses=user_data[4])
+    return None
+
+def add_user(user_id: int) -> None:
+    """Add a new user to the database."""
+    database.add_user(user_id)
+
+def update_phone_number(user_id: int, phone_number: str) -> None:
+    """Update a user's phone number in the database."""
+    database.update_phone_number(user_id, phone_number)
+
+async def request_phone_number(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Request the user's phone number."""
+    keyboard = [[KeyboardButton("Share Contact", request_contact=True)]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True)
+    await update.message.reply_text("Welcome! I need your phone number to proceed. Please share your contact.", reply_markup=reply_markup)
+    context.user_data['state'] = 'waiting_for_phone_number'
+
+async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the shared contact information."""
+    user_id = update.effective_user.id
+    phone_number = update.message.contact.phone_number
+    update_phone_number(user_id, phone_number)
+    await show_main_menu(update, context)
+    context.user_data['state'] = None
 
 async def check_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Check if the user has any uses left (free or purchased)."""
@@ -58,8 +93,6 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text('Welcome! Please choose an option:', reply_markup=reply_markup)
 
-# ... (keep other existing functions)
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle user messages based on the current state."""
     if update.message.text == "Evaluate":
@@ -84,8 +117,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text('Now, please send me the essay.')
         context.user_data['state'] = 'waiting_for_essay'
     elif context.user_data.get('state') == 'waiting_for_essay':
-        # This is where you'd handle the essay evaluation
-        await update.message.reply_text('Thank you for your essay. Here is your evaluation: [Your evaluation logic here]')
+        # Use the handle_essay function from evaluate.py
+        await handle_essay(update, context)
         context.user_data['state'] = None
         await show_main_menu(update, context)
     elif context.user_data.get('state') == 'waiting_for_feedback':
