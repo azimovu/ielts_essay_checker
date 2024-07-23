@@ -4,6 +4,7 @@ from config import TELEGRAM_BOT_TOKEN
 from handlers import start, evaluate, feedback
 from utils import user_management
 from database import migrate_database
+from handlers.start import handle_contact_shared
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -22,6 +23,7 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.Regex('^Check Remaining Uses$'), user_management.handle_check_remaining_uses))
     application.add_handler(MessageHandler(filters.Regex('^Purchase More Uses$'), user_management.handle_message))
     application.add_handler(MessageHandler(filters.CONTACT, user_management.handle_contact))
+    application.add_handler(MessageHandler(filters.CONTACT, handle_contact_shared))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, user_management.handle_message))
 
     application.run_polling()
