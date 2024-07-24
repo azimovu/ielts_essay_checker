@@ -1,5 +1,5 @@
 import logging
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from config import TELEGRAM_BOT_TOKEN
 from handlers import start, evaluate, feedback
 from utils import user_management
@@ -25,7 +25,8 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.CONTACT, user_management.handle_contact))
     application.add_handler(MessageHandler(filters.CONTACT, handle_contact_shared))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, user_management.handle_message))
-
+    application.add_handler(CallbackQueryHandler(user_management.handle_purchase_callback))
+    
     application.run_polling()
 
 if __name__ == '__main__':

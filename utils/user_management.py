@@ -1,5 +1,5 @@
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
-from telegram.ext import ContextTypes
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, CallbackQueryHandler
 from models.user import User
 import database
 from handlers.evaluate import handle_evaluate, handle_essay  # Import both functions
@@ -57,20 +57,49 @@ async def check_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool
         return False
 
 async def show_purchase_options(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show options to purchase more uses."""
-    keyboard = [["Purchase 5 uses", "Purchase 10 uses"], ["Back to Main Menu"]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text('Select a purchase option:', reply_markup=reply_markup)
+    """Show options to purchase more uses with an inline keyboard."""
+    keyboard = [
+        [
+            InlineKeyboardButton("5 uses", callback_data="purchase_5"),
+            InlineKeyboardButton("10 uses", callback_data="purchase_10")
+        ],
+        [
+            InlineKeyboardButton("20 uses", callback_data="purchase_20"),
+            InlineKeyboardButton("Custom amount", callback_data="purchase_custom")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text('Select a purchase option or choose a custom amount:', reply_markup=reply_markup)
 
-async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_purchase_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the callback from the inline keyboard."""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "purchase_custom":
+        await query.edit_message_text("Please enter the number of uses you'd like to purchase:")
+        context.user_data['state'] = 'waiting_for_custom_amount'
+    else:
+        amount = int(query.data.split('_')[1])
+        await handle_purchase(update, context, amount)
+
+async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: int = None) -> None:
     """Handle the purchase of more uses."""
     user_id = update.effective_user.id
-    purchase_amount = 5 if update.message.text == "Purchase 5 uses" else 10
     
-    # Simulate a successful purchase
-    database.add_purchased_uses(user_id, purchase_amount)
+    if amount is None:
+        # This is a custom amount entry
+        try:
+            amount = int(update.message.text)
+            if amount <= 0:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text("Please enter a valid positive number.")
+            return
+        
+    database.add_purchased_uses(user_id, amount)
     
-    await update.message.reply_text(f"Purchase successful! You've added {purchase_amount} more uses to your account.")
+    await update.message.reply_text(f"Purchase successful! You've added {amount} more uses to your account.")
     await show_main_menu(update, context)
 
 async def handle_check_remaining_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -108,6 +137,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_purchase(update, context)
     elif update.message.text == "Back to Main Menu":
         await show_main_menu(update, context)
+    elif context.user_data.get('state') == 'waiting_for_custom_amount':
+        await handle_purchase(update, context)
     elif context.user_data.get('state') == 'waiting_for_topic':
         context.user_data['topic'] = update.message.text
         await update.message.reply_text('Now, please send me the essay.')
