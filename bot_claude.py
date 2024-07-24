@@ -18,6 +18,12 @@ def main() -> None:
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start.handle_start))
+    application.add_handler(CommandHandler("evaluate", evaluate.handle_evaluate))
+    application.add_handler(CommandHandler("feedback", feedback.handle_feedback))
+    application.add_handler(CommandHandler("check_uses", user_management.handle_check_remaining_uses))
+    application.add_handler(CommandHandler("purchase", user_management.show_purchase_options))
+
+    application.add_handler(CommandHandler("start", start.handle_start))
     application.add_handler(MessageHandler(filters.Regex('^Evaluate$'), user_management.handle_message))
     application.add_handler(MessageHandler(filters.Regex('^Feedback$'), user_management.handle_message))
     application.add_handler(MessageHandler(filters.Regex('^Check Remaining Uses$'), user_management.handle_check_remaining_uses))
@@ -26,7 +32,7 @@ def main() -> None:
     application.add_handler(MessageHandler(filters.CONTACT, handle_contact_shared))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, user_management.handle_message))
     application.add_handler(CallbackQueryHandler(user_management.handle_purchase_callback))
-    
+
     application.run_polling()
 
 if __name__ == '__main__':
