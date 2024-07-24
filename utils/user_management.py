@@ -2,9 +2,8 @@ from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from models.user import User
 import database
-from handlers.evaluate import handle_essay  # Import the handle_essay function
-from handlers.feedback import handle_feedback, process_feedback  # Import both feedback functions
-
+from handlers.evaluate import handle_evaluate, handle_essay  # Import both functions
+from handlers.feedback import handle_feedback, process_feedback
 
 def get_user(user_id: int) -> User:
     """Get a user from the database."""
@@ -98,11 +97,9 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle user messages based on the current state."""
     if update.message.text == "Evaluate":
-        if await check_uses(update, context):
-            await update.message.reply_text('Please provide the topic for evaluation.')
-            context.user_data['state'] = 'waiting_for_topic'
+        await handle_evaluate(update, context)
     elif update.message.text == "Feedback":
-        await handle_feedback(update, context)  # This will set the state to 'waiting_for_feedback'
+        await handle_feedback(update, context)
     elif update.message.text == "Check Remaining Uses":
         await handle_check_remaining_uses(update, context)
     elif update.message.text == "Purchase More Uses":
@@ -117,11 +114,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data['state'] = 'waiting_for_essay'
     elif context.user_data.get('state') == 'waiting_for_essay':
         await handle_essay(update, context)
-        context.user_data['state'] = None
-        await show_main_menu(update, context)
     elif context.user_data.get('state') == 'waiting_for_feedback':
-        await process_feedback(update, context)  # Process the feedback
-        await show_main_menu(update, context)
+        await process_feedback(update, context)
     else:
         await update.message.reply_text("I'm sorry, I didn't understand that command. Please use the menu options.")
         await show_main_menu(update, context)
+
+async def check_and_decrement_uses(user_id: int) -> bool:
+    """Check if the user has any uses left and decrement if true."""
+    free_uses_left = database.get_free_uses_left(user_id)
+    purchased_uses = database.get_purchased_uses(user_id)
+    
+    if free_uses_left > 0:
+        database.decrement_free_uses(user_id)
+        return True
+    elif purchased_uses > 0:
+        database.decrement_purchased_uses(user_id)
+        return True
+    return False
