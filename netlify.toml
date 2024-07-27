@@ -1,5 +1,9 @@
 [build]
 command = "pip install -r requirements.txt"
+<<<<<<< HEAD
+=======
+functions = "netlify/functions"
+>>>>>>> fdfafaafee736e4ab8a35498a0fd8df16d1238d2
 
 [functions]
 directory = "netlify/functions"
