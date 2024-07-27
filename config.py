@@ -9,3 +9,7 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Database configuration
 DB_NAME = 'users.db'
+
+# Webhook configuration
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+PORT = int(os.getenv('PORT', 5000))
