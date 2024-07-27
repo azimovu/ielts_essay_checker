@@ -1,5 +1,5 @@
 python-telegram-bot
 requests
 python-dotenv
-sqlite3
+pysqlite3
 anthropic
