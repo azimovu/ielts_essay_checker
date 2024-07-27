@@ -1,0 +1,12 @@
+[build]
+command = "pip install -r requirements.txt"
+functions = "netlify/functions"
+publish = "public"
+
+[functions]
+directory = "netlify/functions"
+
+[[redirects]]
+from = "/*"
+to = "/.netlify/functions/bot"
+status = 200
