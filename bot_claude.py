@@ -7,10 +7,14 @@ from handlers import start, evaluate, feedback
 from utils import user_management
 from database import migrate_database
 from handlers.start import handle_contact_shared
+from flask import Flask, request
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Create Flask app
+app = Flask(__name__)
 
 def main() -> None:
     """Start the bot using webhooks."""
@@ -40,10 +44,23 @@ def main() -> None:
     # Set up webhook
     application.run_webhook(
         listen="0.0.0.0",
-        port=PORT,
+        port=int(os.environ.get("PORT", 5000)),
         url_path=TELEGRAM_BOT_TOKEN,
         webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_BOT_TOKEN}"
     )
 
+    return application
+
+# Create the Application and pass it to the handler
+application = main()
+
+@app.route("/", methods=["GET", "POST"])
+def webhook():
+    """Handle incoming Telegram updates."""
+    if request.method == "POST":
+        update = telegram.Update.de_json(request.get_json(force=True), application.bot)
+        application.process_update(update)
+    return "OK"
+
 if __name__ == '__main__':
-    main()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
