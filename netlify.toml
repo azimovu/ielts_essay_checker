@@ -1,5 +1,5 @@
 [build]
-command = "npm install telegraf"
+command = "npm install && pip install -r requirements.txt"
 functions = "netlify/functions"
 
 [functions]

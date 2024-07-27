@@ -1,13 +1,15 @@
+import json
+import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-from config import TELEGRAM_BOT_TOKEN, WEBHOOK_URL
+from telegram.ext.filters import Regex
+from config import TELEGRAM_BOT_TOKEN
 from handlers import start, evaluate, feedback
 from utils import user_management
 from database import migrate_database
-from handlers.start import handle_contact_shared
 
-def handler(event, context):
-    """Netlify function handler"""
+def main():
+    """Handle Telegram webhook."""
     # Run database migration
     migrate_database()
 
@@ -21,30 +23,24 @@ def handler(event, context):
     application.add_handler(CommandHandler("purchase", user_management.show_purchase_options))
     application.add_handler(CommandHandler("verify_payment", user_management.verify_payment))
 
-    application.add_handler(MessageHandler(filters.Regex('^Evaluate$'), user_management.handle_message))
-    application.add_handler(MessageHandler(filters.Regex('^Feedback$'), user_management.handle_message))
-    application.add_handler(MessageHandler(filters.Regex('^Check Remaining Uses$'), user_management.handle_check_remaining_uses))
-    application.add_handler(MessageHandler(filters.Regex('^Purchase More Uses$'), user_management.handle_message))
-    application.add_handler(MessageHandler(filters.Regex('^Verify Payment$'), user_management.verify_payment))
+    application.add_handler(MessageHandler(Regex('^Evaluate$'), user_management.handle_message))
+    application.add_handler(MessageHandler(Regex('^Feedback$'), user_management.handle_message))
+    application.add_handler(MessageHandler(Regex('^Check Remaining Uses$'), user_management.handle_check_remaining_uses))
+    application.add_handler(MessageHandler(Regex('^Purchase More Uses$'), user_management.handle_message))
+    application.add_handler(MessageHandler(Regex('^Verify Payment$'), user_management.verify_payment))
     application.add_handler(MessageHandler(filters.CONTACT, user_management.handle_contact))
-    application.add_handler(MessageHandler(filters.CONTACT, handle_contact_shared))
+    application.add_handler(MessageHandler(filters.CONTACT, start.handle_contact_shared))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, user_management.handle_message))
     application.add_handler(CallbackQueryHandler(user_management.handle_purchase_callback))
 
     # Process the update
-    try:
-        update = Update.de_json(event['body'], application.bot)
+    update_json = os.environ.get('TELEGRAM_UPDATE')
+    if update_json:
+        update = Update.de_json(json.loads(update_json), application.bot)
         application.process_update(update)
-    except Exception as e:
-        print(f"Error processing update: {e}")
-        return {"statusCode": 500, "body": "Error processing update"}
+        print("OK")
+    else:
+        print("No update received")
 
-    return {"statusCode": 200, "body": "OK"}
-
-# Set webhook
-def set_webhook():
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    application.bot.set_webhook(f"{WEBHOOK_URL}/.netlify/functions/bot")
-
-# Run set_webhook() when deploying
-set_webhook()
+if __name__ == '__main__':
+    main()

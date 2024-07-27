@@ -1,18 +1,33 @@
-const { Telegraf } = require('telegraf');
+const { spawn } = require('child_process');
+const path = require('path');
 
 exports.handler = async (event) => {
-  const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
   if (event.httpMethod !== 'POST') {
     return { statusCode: 200, body: 'Send POST request to use the bot.' };
   }
 
-  try {
-    const update = JSON.parse(event.body);
-    await bot.handleUpdate(update);
-    return { statusCode: 200, body: 'OK' };
-  } catch (error) {
-    console.error('Error:', error);
-    return { statusCode: 500, body: 'Error processing update' };
-  }
+  return new Promise((resolve, reject) => {
+    const pythonProcess = spawn('python', [path.join(__dirname, 'bot.py')], {
+      env: { ...process.env, TELEGRAM_UPDATE: event.body }
+    });
+
+    let result = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+      result += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      console.error(`Python Error: ${data}`);
+    });
+
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`Python process exited with code ${code}`);
+        resolve({ statusCode: 500, body: 'Error processing update' });
+      } else {
+        resolve({ statusCode: 200, body: result || 'OK' });
+      }
+    });
+  });
 };
