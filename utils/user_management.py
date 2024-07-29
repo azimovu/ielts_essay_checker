@@ -2,7 +2,7 @@ from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboard
 from telegram.ext import ContextTypes, CallbackQueryHandler
 from models.user import User
 import database
-from handlers.evaluate import handle_evaluate, handle_essay  # Import both functions
+from handlers.evaluate import handle_evaluate, handle_essay
 from handlers.feedback import handle_feedback, process_feedback
 from utils.paycom_integration import create_test_invoice, check_transaction
 import uuid
@@ -42,21 +42,24 @@ async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     context.user_data['state'] = None
 
 async def check_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Check if the user has any uses left (free or purchased)."""
+    """Check if the user has any uses left (free or purchased) and increment usage count."""
     user_id = update.effective_user.id
     free_uses_left = database.get_free_uses_left(user_id)
     purchased_uses = database.get_purchased_uses(user_id)
     
     if free_uses_left > 0:
         database.decrement_free_uses(user_id)
+        database.increment_usage_count(user_id)
         return True
     elif purchased_uses > 0:
         database.decrement_purchased_uses(user_id)
+        database.increment_usage_count(user_id)
         return True
     else:
         await update.message.reply_text("You've used all your free and purchased attempts. To continue using the service, please purchase more uses.")
         await show_purchase_options(update, context)
         return False
+
 
 async def show_purchase_options(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show options to purchase more uses with an inline keyboard."""
@@ -158,12 +161,14 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def handle_check_remaining_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the request to check remaining uses."""
+    """Handle the request to check remaining uses and total usage count."""
     user_id = update.effective_user.id
     free_uses_left = database.get_free_uses_left(user_id)
     purchased_uses = database.get_purchased_uses(user_id)
+    usage_count = database.get_usage_count(user_id)
     
-    message = f"You have {free_uses_left} free uses left.\n"
+    message = f"You have used the service {usage_count} times in total.\n"
+    message += f"You have {free_uses_left} free uses left.\n"
     if purchased_uses > 0:
         message += f"You also have {purchased_uses} purchased uses available."
     else:
@@ -171,6 +176,7 @@ async def handle_check_remaining_uses(update: Update, context: ContextTypes.DEFA
     
     await update.message.reply_text(message)
     await show_main_menu(update, context)
+
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show the main menu."""
