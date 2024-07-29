@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 from utils import essay_analysis
-from utils.usage_utils import check_and_decrement_uses, handle_insufficient_uses
+from utils.user_management import check_and_decrement_uses, handle_insufficient_uses
 
 async def handle_evaluate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the Evaluate option."""

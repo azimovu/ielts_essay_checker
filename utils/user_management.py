@@ -213,14 +213,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await show_main_menu(update, context)
 
 async def check_and_decrement_uses(user_id: int) -> bool:
-    """Check if the user has any uses left and decrement if true."""
+    """Check if the user has any uses left, decrement if true, and increment usage count."""
     free_uses_left = database.get_free_uses_left(user_id)
     purchased_uses = database.get_purchased_uses(user_id)
     
     if free_uses_left > 0:
         database.decrement_free_uses(user_id)
+        database.increment_usage_count(user_id)
         return True
     elif purchased_uses > 0:
         database.decrement_purchased_uses(user_id)
+        database.increment_usage_count(user_id)
         return True
     return False
