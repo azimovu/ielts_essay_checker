@@ -4,8 +4,6 @@ from models.user import User
 import database
 from handlers.evaluate import handle_evaluate, handle_essay  # Import both functions
 from handlers.feedback import handle_feedback, process_feedback
-from utils.paycom_integration import create_test_invoice, check_transaction
-import uuid
 
 def get_user(user_id: int) -> User:
     """Get a user from the database."""
@@ -62,11 +60,11 @@ async def show_purchase_options(update: Update, context: ContextTypes.DEFAULT_TY
     """Show options to purchase more uses with an inline keyboard."""
     keyboard = [
         [
-            InlineKeyboardButton("5 uses - 5,000 UZS", callback_data="purchase_5"),
-            InlineKeyboardButton("10 uses - 9,000 UZS", callback_data="purchase_10")
+            InlineKeyboardButton("5 uses", callback_data="purchase_5"),
+            InlineKeyboardButton("10 uses", callback_data="purchase_10")
         ],
         [
-            InlineKeyboardButton("20 uses - 16,000 UZS", callback_data="purchase_20"),
+            InlineKeyboardButton("20 uses", callback_data="purchase_20"),
             InlineKeyboardButton("Custom amount", callback_data="purchase_custom")
         ]
     ]
@@ -96,66 +94,13 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            await send_message(update, "Please enter a valid positive number.")
+            await update.message.reply_text("Please enter a valid positive number.")
             return
-    
-    # Calculate price (for example, 1,000 UZS per use)
-    price_uzs = amount * 1000
-    price_tiyins = price_uzs * 100  # Convert to tiyins
-    
-    # Create a unique order ID
-    order_id = str(uuid.uuid4())
-    
-    # Create test invoice
-    invoice_response = create_test_invoice(price_tiyins, order_id)
-    
-    if 'result' in invoice_response and 'invoice_id' in invoice_response['result']:
-        invoice_id = invoice_response['result']['invoice_id']
-        pay_url = f"https://checkout.test.paycom.uz/{invoice_id}"
         
-        keyboard = [[InlineKeyboardButton("Pay Now", url=pay_url)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await send_message(
-            update,
-            f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
-            f"Click the button below to proceed with the payment:",
-            reply_markup=reply_markup
-        )
-        
-        # Store the order details in context for later verification
-        context.user_data['pending_order'] = {
-            'order_id': order_id,
-            'amount': amount,
-            'invoice_id': invoice_id
-        }
-    else:
-        await send_message(update, "Sorry, there was an error creating the invoice. Please try again later.")
-
-async def send_message(update: Update, text: str, reply_markup=None):
-    """Send a message in both callback query and normal message contexts."""
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup)
-
-async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Verify the payment status and update user's purchased uses."""
-    if 'pending_order' not in context.user_data:
-        await send_message(update, "No pending order found. Please start a new purchase.")
-        return
+    database.add_purchased_uses(user_id, amount)
     
-    pending_order = context.user_data['pending_order']
-    transaction_response = check_transaction(pending_order['invoice_id'])
-    
-    if 'result' in transaction_response and transaction_response['result']['state'] == 2:  # 2 means successful payment
-        user_id = update.effective_user.id
-        database.add_purchased_uses(user_id, pending_order['amount'])
-        await send_message(update, f"Payment successful! You've added {pending_order['amount']} more uses to your account.")
-        del context.user_data['pending_order']
-    else:
-        await send_message(update, "Payment not yet completed or failed. Please try again or start a new purchase.")
-
+    await update.message.reply_text(f"Purchase successful! You've added {amount} more uses to your account.")
+    await show_main_menu(update, context)
 
 async def handle_check_remaining_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the request to check remaining uses."""
@@ -188,8 +133,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_check_remaining_uses(update, context)
     elif update.message.text == "Purchase More Uses":
         await show_purchase_options(update, context)
-    elif update.message.text == "Verify Payment":
-        await verify_payment(update, context)
+    elif update.message.text in ["Purchase 5 uses", "Purchase 10 uses"]:
+        await handle_purchase(update, context)
     elif update.message.text == "Back to Main Menu":
         await show_main_menu(update, context)
     elif context.user_data.get('state') == 'waiting_for_custom_amount':
