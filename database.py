@@ -1,6 +1,7 @@
 import sqlite3
 from sqlite3 import Error
 from config import DB_NAME
+
 def migrate_database():
     conn = create_connection()
     if conn is not None:
@@ -15,6 +16,9 @@ def migrate_database():
             
             if 'purchased_uses' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN purchased_uses INTEGER DEFAULT 0")
+            
+            if 'usage_count' not in columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN usage_count INTEGER DEFAULT 0")
             
             conn.commit()
             print("Database migration completed successfully.")
@@ -48,6 +52,22 @@ def create_table(conn):
         ''')
     except Error as e:
         print(e)
+
+def increment_usage_count(user_id):
+    conn = create_connection()
+    sql = ''' UPDATE users SET usage_count = usage_count + 1 WHERE id = ? '''
+    cur = conn.cursor()
+    cur.execute(sql, (user_id,))
+    conn.commit()
+    conn.close()
+
+def get_usage_count(user_id):
+    conn = create_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT usage_count FROM users WHERE id = ?", (user_id,))
+    result = cur.fetchone()
+    conn.close()
+    return result[0] if result else 0
 
 def get_user(user_id):
     conn = create_connection()
