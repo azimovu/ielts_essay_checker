@@ -23,7 +23,9 @@ def main() -> None:
     application.add_handler(CommandHandler("check_uses", user_management.handle_check_remaining_uses))
     application.add_handler(CommandHandler("purchase", user_management.show_purchase_options))
     application.add_handler(CommandHandler("verify_payment", user_management.verify_payment))
-
+    application.add_handler(CommandHandler("purchase", user_management.show_purchase_options))
+    application.add_handler(CommandHandler("verify_payment", user_management.verify_payment))
+    application.add_handler(CallbackQueryHandler(user_management.handle_purchase_callback))
 
     application.add_handler(MessageHandler(filters.Regex('^Evaluate$'), user_management.handle_message))
     application.add_handler(MessageHandler(filters.Regex('^Feedback$'), user_management.handle_message))

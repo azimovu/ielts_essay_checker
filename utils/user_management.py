@@ -1,11 +1,13 @@
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CallbackQueryHandler
+from telegram.ext import ContextTypes
 from models.user import User
 import database
 from handlers.evaluate import handle_evaluate, handle_essay
 from handlers.feedback import handle_feedback, process_feedback
-from utils.paycom_integration import create_test_invoice, check_transaction
+from utils.click_integration import create_invoice, check_invoice_status, check_payment_status
+from config import CLICK_MERCHANT_ID, CLICK_SERVICE_ID
 import uuid
+import asyncio
 
 def get_user(user_id: int) -> User:
     """Get a user from the database."""
@@ -88,9 +90,37 @@ async def handle_purchase_callback(update: Update, context: ContextTypes.DEFAULT
         amount = int(query.data.split('_')[1])
         await handle_purchase(update, context, amount)
 
+async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Periodically check payment status."""
+    check_interval = 60  # Check every 60 seconds
+    max_checks = 10  # Maximum number of checks (10 minutes total)
+    
+    for _ in range(max_checks):
+        await asyncio.sleep(check_interval)
+        
+        if 'pending_order' not in context.user_data:
+            return  # No pending order, stop checking
+        
+        pending_order = context.user_data['pending_order']
+        invoice_status = check_invoice_status(pending_order['invoice_id'])
+        
+        if invoice_status['error_code'] == 0 and invoice_status['invoice_status'] == 2:  # 2 means paid
+            payment_status = check_payment_status(invoice_status['payment_id'])
+            if payment_status['error_code'] == 0 and payment_status['payment_status'] == 2:  # 2 means success
+                user_id = update.effective_user.id
+                database.add_purchased_uses(user_id, pending_order['amount'])
+                await send_message(update, f"Payment successful! You've added {pending_order['amount']} more uses to your account.")
+                del context.user_data['pending_order']
+                return  # Payment successful, stop checking
+    
+    # If we've reached this point, the payment wasn't completed within the maximum check time
+    await send_message(update, "The payment verification period has expired. If you've made the payment, please use the /verify_payment command to manually check the status.")
+
+
 async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: int = None) -> None:
     """Handle the purchase of more uses."""
     user_id = update.effective_user.id
+    user = get_user(user_id)
     
     if amount is None:
         # This is a custom amount entry
@@ -104,19 +134,20 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
     
     # Calculate price (for example, 1,000 UZS per use)
     price_uzs = amount * 1000
-    price_tiyins = price_uzs * 100  # Convert to tiyins
     
     # Create a unique order ID
     order_id = str(uuid.uuid4())
     
-    # Create test invoice
-    invoice_response = create_test_invoice(price_tiyins, order_id)
+    # Create invoice
+    invoice_response = create_invoice(price_uzs, user.phone_number, order_id)
     
-    if 'result' in invoice_response and 'invoice_id' in invoice_response['result']:
-        invoice_id = invoice_response['result']['invoice_id']
-        pay_url = f"https://checkout.test.paycom.uz/{invoice_id}"
+    if 'error_code' in invoice_response and invoice_response['error_code'] == 0:
+        invoice_id = invoice_response['invoice_id']
         
-        keyboard = [[InlineKeyboardButton("Pay Now", url=pay_url)]]
+        # Construct the correct payment URL
+        payment_url = f"https://my.click.uz/services/pay?service_id={CLICK_SERVICE_ID}&merchant_id={CLICK_MERCHANT_ID}&amount={price_uzs}&transaction_param={order_id}"
+        
+        keyboard = [[InlineKeyboardButton("Pay Now", url=payment_url)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await send_message(
@@ -132,8 +163,33 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
             'amount': amount,
             'invoice_id': invoice_id
         }
+        
+        # Start periodic payment check
+        asyncio.create_task(periodic_payment_check(update, context))
     else:
-        await send_message(update, "Sorry, there was an error creating the invoice. Please try again later.")
+        await send_message(update, f"Sorry, there was an error creating the invoice. Error: {invoice_response.get('error_note', 'Unknown error')}")
+
+async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manually verify the payment status and update user's purchased uses."""
+    if 'pending_order' not in context.user_data:
+        await send_message(update, "No pending order found. Please start a new purchase.")
+        return
+    
+    pending_order = context.user_data['pending_order']
+    invoice_status = check_invoice_status(pending_order['invoice_id'])
+    
+    if invoice_status['error_code'] == 0 and invoice_status['invoice_status'] == 2:  # 2 means paid
+        payment_status = check_payment_status(invoice_status['payment_id'])
+        if payment_status['error_code'] == 0 and payment_status['payment_status'] == 2:  # 2 means success
+            user_id = update.effective_user.id
+            database.add_purchased_uses(user_id, pending_order['amount'])
+            await send_message(update, f"Payment successful! You've added {pending_order['amount']} more uses to your account.")
+            del context.user_data['pending_order']
+        else:
+            await send_message(update, "Payment verification failed. Please contact support if you believe this is an error.")
+    else:
+        await send_message(update, "Payment not yet completed or failed. Please try again or start a new purchase.")
+
 
 async def send_message(update: Update, text: str, reply_markup=None):
     """Send a message in both callback query and normal message contexts."""
@@ -142,22 +198,6 @@ async def send_message(update: Update, text: str, reply_markup=None):
     else:
         await update.message.reply_text(text, reply_markup=reply_markup)
 
-async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Verify the payment status and update user's purchased uses."""
-    if 'pending_order' not in context.user_data:
-        await send_message(update, "No pending order found. Please start a new purchase.")
-        return
-    
-    pending_order = context.user_data['pending_order']
-    transaction_response = check_transaction(pending_order['invoice_id'])
-    
-    if 'result' in transaction_response and transaction_response['result']['state'] == 2:  # 2 means successful payment
-        user_id = update.effective_user.id
-        database.add_purchased_uses(user_id, pending_order['amount'])
-        await send_message(update, f"Payment successful! You've added {pending_order['amount']} more uses to your account.")
-        del context.user_data['pending_order']
-    else:
-        await send_message(update, "Payment not yet completed or failed. Please try again or start a new purchase.")
 
 
 async def handle_check_remaining_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
