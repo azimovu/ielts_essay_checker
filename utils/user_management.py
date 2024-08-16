@@ -63,12 +63,24 @@ async def check_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool
         return False
 
 
+
+def calculate_price(uses: int) -> int:
+    """Calculate the price based on the number of uses."""
+    if uses == 5:
+        return 5000
+    elif uses == 10:
+        return 10000
+    elif uses == 20:
+        return 16000
+    else:
+        return uses * 1000
+
 async def show_purchase_options(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show options to purchase more uses with an inline keyboard."""
     keyboard = [
         [
             InlineKeyboardButton("5 uses - 5,000 UZS", callback_data="purchase_5"),
-            InlineKeyboardButton("10 uses - 9,000 UZS", callback_data="purchase_10")
+            InlineKeyboardButton("10 uses - 10,000 UZS", callback_data="purchase_10")
         ],
         [
             InlineKeyboardButton("20 uses - 16,000 UZS", callback_data="purchase_20"),
@@ -77,6 +89,7 @@ async def show_purchase_options(update: Update, context: ContextTypes.DEFAULT_TY
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text('Select a purchase option or choose a custom amount:', reply_markup=reply_markup)
+
 
 async def handle_purchase_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the callback from the inline keyboard."""
@@ -132,8 +145,8 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
             await send_message(update, "Please enter a valid positive number.")
             return
     
-    # Calculate price (for example, 1,000 UZS per use)
-    price_uzs = amount * 1000
+    # Calculate price using the new pricing structure
+    price_uzs = calculate_price(amount)
     
     # Create a unique order ID
     order_id = str(uuid.uuid4())
