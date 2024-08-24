@@ -1,19 +1,31 @@
 import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from web_server import app
 from config import TELEGRAM_BOT_TOKEN
 from handlers import start, evaluate, feedback
 from utils import user_management
 from database import migrate_database
 from handlers.start import handle_contact_shared
+import threading
+import asyncio
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def run_flask():
+    app.run(host='0.0.0.0', port=5000)
+
 def main() -> None:
     """Start the bot."""
     # Run database migration
     migrate_database()
+    
+    # Run Flask in a separate thread
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+
 
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 

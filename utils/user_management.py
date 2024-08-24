@@ -131,12 +131,10 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: int = None) -> None:
-    """Handle the purchase of more uses."""
     user_id = update.effective_user.id
     user = get_user(user_id)
     
     if amount is None:
-        # This is a custom amount entry
         try:
             amount = int(update.message.text)
             if amount <= 0:
@@ -145,42 +143,20 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
             await send_message(update, "Please enter a valid positive number.")
             return
     
-    # Calculate price using the new pricing structure
     price_uzs = calculate_price(amount)
     
-    # Create a unique order ID
-    order_id = str(uuid.uuid4())
+    # Create a payment URL for Click
+    payment_url = f"https://my.click.uz/services/pay?service_id={CLICK_SERVICE_ID}&merchant_id={CLICK_MERCHANT_ID}&amount={price_uzs}&transaction_param={user_id}"
     
-    # Create invoice
-    invoice_response = create_invoice(price_uzs, user.phone_number, order_id)
+    keyboard = [[InlineKeyboardButton("Pay Now", url=payment_url)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
     
-    if 'error_code' in invoice_response and invoice_response['error_code'] == 0:
-        invoice_id = invoice_response['invoice_id']
-        
-        # Construct the correct payment URL
-        payment_url = f"https://my.click.uz/services/pay?service_id={CLICK_SERVICE_ID}&merchant_id={CLICK_MERCHANT_ID}&amount={price_uzs}&transaction_param={order_id}"
-        
-        keyboard = [[InlineKeyboardButton("Pay Now", url=payment_url)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await send_message(
-            update,
-            f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
-            f"Click the button below to proceed with the payment:",
-            reply_markup=reply_markup
-        )
-        
-        # Store the order details in context for later verification
-        context.user_data['pending_order'] = {
-            'order_id': order_id,
-            'amount': amount,
-            'invoice_id': invoice_id
-        }
-        
-        # Start periodic payment check
-        asyncio.create_task(periodic_payment_check(update, context))
-    else:
-        await send_message(update, f"Sorry, there was an error creating the invoice. Error: {invoice_response.get('error_note', 'Unknown error')}")
+    await send_message(
+        update,
+        f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
+        f"Click the button below to proceed with the payment:",
+        reply_markup=reply_markup
+    )
 
 async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Manually verify the payment status and update user's purchased uses."""
