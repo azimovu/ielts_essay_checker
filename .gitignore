@@ -1,5 +1,6 @@
 # Ignore log files
 *.log
+*.log*
 
 # But don't ignore important.log even if it's a log file
 !important.log
