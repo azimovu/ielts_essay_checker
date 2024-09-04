@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
-from config import CLICK_SECRET_KEY
+from config import CLICK_SECRET_KEY, CLICK_MERCHANT_USER_ID, CLICK_SERVICE_ID
 import hashlib
+import time
+import requests
 from database import add_purchased_uses, get_user
 import logging
 from logging.handlers import RotatingFileHandler
@@ -53,6 +55,20 @@ def complete_payment():
     logger.info(f'Request headers: {dict(request.headers)}')
     logger.info(f'Request form data: {request.form}')
     
+    if request.method == 'GET':  # Assuming Click.uz redirects with GET
+        click_trans_id = request.args.get('click_trans_id')
+        merchant_trans_id = request.args.get('merchant_trans_id')
+        error = request.args.get('error')
+        # ... other parameters as needed
+
+        if error == '0':  # Payment successful
+            # Verify payment with Click.uz API
+            # Update database, etc.
+            return jsonify({'error': 0, 'error_note': 'Success'})
+        else:
+            # Handle payment failure
+            return jsonify({'error': -1, 'error_note': 'Payment failed'})
+        
     if request.method == 'POST':
         if not verify_click_request(request.form):
             logger.warning('Invalid signature for /click/complete request')
@@ -65,9 +81,18 @@ def complete_payment():
 
         logger.info(f'Successfully processed /click/complete request for user ID {user_id} with {uses} uses')
         return jsonify({'error': 0, 'error_note': 'Success'})
-    elif request.method == 'GET':
-        logger.info('Received GET request to /click/complete')
-        return jsonify({'error': -1, 'error_note': 'GET method not supported for this endpoint'})
+    
+@app.route('/click/invoice/status/<invoice_id>', methods=['GET'])
+def invoice_status(invoice_id):
+    auth_header = generate_auth_header()
+    response = requests.get(f'https://api.click.uz/v2/merchant/invoice/status/{CLICK_SERVICE_ID}/{invoice_id}', headers=auth_header)
+    return jsonify(response.json())
+
+@app.route('/click/payment/status/<payment_id>', methods=['GET'])
+def payment_status(payment_id):
+    auth_header = generate_auth_header()
+    response = requests.get(f'https://api.click.uz/v2/merchant/payment/status/{CLICK_SERVICE_ID}/{payment_id}', headers=auth_header)
+    return jsonify(response.json())
 
 def verify_click_request(form_data):
     received_sign = form_data['sign']
@@ -80,5 +105,16 @@ def verify_click_request(form_data):
 def calculate_uses(amount):
     return int(amount // 10)  # Example implementation
 
+def generate_auth_header():
+    timestamp = str(int(time.time()))
+    digest = hashlib.sha1((timestamp + CLICK_SECRET_KEY).encode()).hexdigest()
+    auth_header = f'{CLICK_MERCHANT_USER_ID}:{digest}:{timestamp}'
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Auth': auth_header
+    }
+    return headers
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='127.0.0.1', port=5000)

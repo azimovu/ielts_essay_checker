@@ -1,4 +1,7 @@
 import requests
+import hashlib
+from uuid import uuid4 
+from web_server import generate_auth_header 
 import logging
 from config import CLICK_MERCHANT_ID, CLICK_SERVICE_ID, CLICK_SECRET_KEY
 
@@ -8,30 +11,36 @@ CLICK_API_URL='https://api.click.uz/v2/merchant/'
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_invoice(amount, transaction_param):
-    """Create an invoice using Click.uz."""
-    url = f"{CLICK_API_URL}/create-invoice"
+def create_invoice(amount, phone_number):
+    """`
+    Creates a Click.uz invoice with a unique merchant_trans_id and return URL.
+
+    Args:
+        amount (float): The invoice amount.
+        phone_number (str): The phone number of the invoice recipient.
+
+    Returns:
+        dict: The JSON response from the Click.uz API.
+    """
+
+    merchant_trans_id = str(uuid4())  # Generate a unique ID
+
+    auth_header = generate_auth_header()
     data = {
-        'service_id': CLICK_SERVICE_ID,
-        'merchant_id': CLICK_MERCHANT_ID,
-        'amount': amount,
-        'transaction_param': transaction_param,
-    }
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f"Bearer {CLICK_SECRET_KEY}"
+        "service_id": CLICK_SERVICE_ID,
+        "amount": amount,
+        "phone_number": phone_number,
+        "merchant_trans_id": merchant_trans_id,
+        "return_url": "http://www.uzielts.uz/click/complete" # Add the return URL
     }
 
-    try:
-        logger.info(f"Creating invoice with data: {data}")
-        response = requests.post(url, json=data, headers=headers)
-        response.raise_for_status()
-        invoice_data = response.json()
-        logger.info(f"Invoice created successfully: {invoice_data}")
-        return invoice_data
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error creating invoice: {e}")
-        return None
+    response = requests.post(
+        "https://api.click.uz/v2/merchant/invoice/create",
+        headers=auth_header,
+        json=data,
+    )
+    return response.json()
+
 
 def check_invoice_status(invoice_id):
     """Check the status of an invoice."""
