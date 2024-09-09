@@ -6,7 +6,6 @@ from handlers.evaluate import handle_evaluate, handle_essay
 from handlers.feedback import handle_feedback, process_feedback
 from utils.click_integration import create_invoice, check_invoice_status, check_payment_status
 from config import CLICK_MERCHANT_ID, CLICK_SERVICE_ID
-import uuid
 import asyncio
 
 def get_user(user_id: int) -> User:
@@ -104,7 +103,6 @@ async def handle_purchase_callback(update: Update, context: ContextTypes.DEFAULT
         await handle_purchase(update, context, amount)
 
 async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Periodically check payment status."""
     check_interval = 60  # Check every 60 seconds
     max_checks = 10  # Maximum number of checks (10 minutes total)
     
@@ -115,10 +113,10 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
             return  # No pending order, stop checking
         
         pending_order = context.user_data['pending_order']
-        invoice_status = check_invoice_status(pending_order['invoice_id'])
+        invoice_status = await check_invoice_status(pending_order['invoice_id'])
         
         if invoice_status['error_code'] == 0 and invoice_status['invoice_status'] == 2:  # 2 means paid
-            payment_status = check_payment_status(invoice_status['payment_id'])
+            payment_status = await check_payment_status(invoice_status['payment_id'])
             if payment_status['error_code'] == 0 and payment_status['payment_status'] == 2:  # 2 means success
                 user_id = update.effective_user.id
                 database.add_purchased_uses(user_id, pending_order['amount'])
@@ -128,6 +126,7 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
     
     # If we've reached this point, the payment wasn't completed within the maximum check time
     await send_message(update, "The payment verification period has expired. If you've made the payment, please use the /verify_payment command to manually check the status.")
+
 
 
 async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: int = None) -> None:
@@ -145,30 +144,45 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
     
     price_uzs = calculate_price(amount)
     
-    # Create a payment URL for Click
-    payment_url = f"https://my.click.uz/services/pay?service_id={CLICK_SERVICE_ID}&merchant_id={CLICK_MERCHANT_ID}&amount={price_uzs}&transaction_param={user_id}"
+    # Create an invoice using Click API
+    invoice_data, merchant_trans_id = await create_invoice(price_uzs, user.phone_number)
     
-    keyboard = [[InlineKeyboardButton("Pay Now", url=payment_url)]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await send_message(
-        update,
-        f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
-        f"Click the button below to proceed with the payment:",
-        reply_markup=reply_markup
-    )
+    if invoice_data.get('error_code') == 0:
+        invoice_id = invoice_data['invoice_id']
+        payment_url = invoice_data['payment_url']
+        
+        context.user_data['pending_order'] = {
+            'invoice_id': invoice_id,
+            'amount': amount,
+            'merchant_trans_id': merchant_trans_id
+        }
+        
+        keyboard = [[InlineKeyboardButton("Pay Now", url=payment_url)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await send_message(
+            update,
+            f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
+            f"Click the button below to proceed with the payment:",
+            reply_markup=reply_markup
+        )
+        
+        # Start periodic payment check
+        asyncio.create_task(periodic_payment_check(update, context))
+    else:
+        await send_message(update, "Sorry, there was an error creating the invoice. Please try again later.")
+
 
 async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Manually verify the payment status and update user's purchased uses."""
     if 'pending_order' not in context.user_data:
         await send_message(update, "No pending order found. Please start a new purchase.")
         return
     
     pending_order = context.user_data['pending_order']
-    invoice_status = check_invoice_status(pending_order['invoice_id'])
+    invoice_status = await check_invoice_status(pending_order['invoice_id'])
     
     if invoice_status['error_code'] == 0 and invoice_status['invoice_status'] == 2:  # 2 means paid
-        payment_status = check_payment_status(invoice_status['payment_id'])
+        payment_status = await check_payment_status(invoice_status['payment_id'])
         if payment_status['error_code'] == 0 and payment_status['payment_status'] == 2:  # 2 means success
             user_id = update.effective_user.id
             database.add_purchased_uses(user_id, pending_order['amount'])
