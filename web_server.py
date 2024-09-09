@@ -6,6 +6,7 @@ import requests
 from database import add_purchased_uses, get_user
 import logging
 from logging.handlers import RotatingFileHandler
+from waitress import serve
 
 app = Flask(__name__)
 
@@ -116,5 +117,5 @@ def generate_auth_header():
     }
     return headers
 
-if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000)
+if __name__ == "__main__":
+    serve(app, host="0.0.0.0", port=5000)
