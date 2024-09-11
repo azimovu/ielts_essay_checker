@@ -25,9 +25,15 @@ async def create_transaction(amount, order_id):
         }
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(PAYCOM_API_URL, headers=auth_header, json=data) as response:
-            return await response.json()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(PAYCOM_API_URL, headers=auth_header, json=data) as response:
+                response_data = await response.json()
+                print(f"Transaction Response: {response_data}")  # Debugging log
+                return response_data
+    except Exception as e:
+        print(f"Error creating transaction: {e}")  # Error log
+        return {"error": str(e)}
 
 async def check_transaction(transaction_id):
     auth_header = await generate_auth_header()
