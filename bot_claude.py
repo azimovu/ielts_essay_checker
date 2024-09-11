@@ -1,10 +1,12 @@
 import logging
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, PreCheckoutQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, PreCheckoutQueryHandler, Update, ContextTypes
 from web_server import app
 from config import TELEGRAM_BOT_TOKEN
 from handlers import start, evaluate, feedback
-from utils import user_management
+from utils import user_management, paycom_integration
 from database import migrate_database
+from utils.paycom_integration import create_transaction
+from config import PAYCOM_MERCHANT_ID
 from handlers.start import handle_contact_shared
 import threading
 import asyncio
@@ -28,7 +30,7 @@ async def invoice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     invoice_id = callback_data.split('_')[-1]
     
     # Retrieve the invoice details from the database or any other storage
-    invoice = database.get_invoice(invoice_id)
+    invoice = user_management.get_invoice(invoice_id)
     
     if invoice:
         # Create the invoice using the Payme API
