@@ -29,23 +29,31 @@ async def invoice_callback(update: Updater, context: ContextTypes.DEFAULT_TYPE) 
     callback_data = update.callback_query.data
     invoice_id = callback_data.split('_')[-1]
     
-    # Retrieve the invoice details from the database or any other storage
-    invoice = user_management.get_invoice(invoice_id)
-    
-    if invoice:
+    try:
+        # Retrieve the invoice details from the database or any other storage
+        invoice = user_management.get_invoice(invoice_id)
+        if not invoice:
+            await update.callback_query.answer(text="Invoice not found. Please try again.", show_alert=True)
+            return
+
         # Create the invoice using the Payme API
         transaction_data = await create_transaction(invoice['amount'], invoice['order_id'])
-        
+        print(f"Transaction Data: {transaction_data}")  # Debugging log
+
         if transaction_data.get('result'):
             transaction_id = transaction_data['result']['transaction']
             payment_url = f"https://checkout.paycom.uz/{PAYCOM_MERCHANT_ID}/{transaction_id}"
-            
+
             # Send the invoice to the user with the payment URL
             await update.callback_query.answer(url=payment_url)
         else:
-            await update.callback_query.answer(text="Failed to create the invoice. Please try again later.", show_alert=True)
-    else:
-        await update.callback_query.answer(text="Invoice not found. Please try again.", show_alert=True)
+            error_message = f"Failed to create the invoice: {transaction_data.get('error', 'Unknown error')}"
+            print(error_message)  # Error log
+            await update.callback_query.answer(text=error_message, show_alert=True)
+    except Exception as e:
+        error_message = f"Exception during invoice creation: {e}"
+        print(error_message)  # Exception log
+        await update.callback_query.answer(text=error_message, show_alert=True)
 
 def main() -> None:
     """Start the bot."""
