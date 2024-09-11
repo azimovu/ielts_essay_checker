@@ -1,5 +1,5 @@
 import logging
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, PreCheckoutQueryHandler, Updater, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, PreCheckoutQueryHandler, ContextTypes, ApplicationBuilder
 from web_server import app
 from config import TELEGRAM_BOT_TOKEN
 from handlers import start, evaluate, feedback
@@ -18,12 +18,12 @@ logger = logging.getLogger(__name__)
 def run_flask():
     app.run(host='0.0.0.0', port=5000)
 
-async def pre_checkout_update(update: Updater, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def pre_checkout_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the pre-checkout update event."""
     query = update.pre_checkout_query
     await query.answer(ok=True)
 
-async def invoice_callback(update: Updater, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def invoice_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the invoice callback event."""
     # Get the necessary information from the callback data
     callback_data = update.callback_query.data
@@ -56,7 +56,7 @@ def main() -> None:
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
 
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     application.add_handler(CommandHandler("start", start.handle_start))
     application.add_handler(CommandHandler("evaluate", evaluate.handle_evaluate))
