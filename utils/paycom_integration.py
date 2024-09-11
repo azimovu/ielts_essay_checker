@@ -28,9 +28,14 @@ async def create_transaction(amount, order_id):
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(PAYCOM_API_URL, headers=auth_header, json=data) as response:
-                response_data = await response.json()
-                print(f"Transaction Response: {response_data}")  # Debugging log
-                return response_data
+                if response.content_type == 'application/json':
+                    response_data = await response.json()
+                    print(f"Transaction Response: {response_data}")  # Debugging log
+                    return response_data
+                else:
+                    raw_response = await response.text()
+                    print(f"Unexpected response format: {raw_response}")  # Log raw response
+                    return {"error": f"Unexpected response format: {response.status}, {raw_response}"}
     except Exception as e:
         print(f"Error creating transaction: {e}")  # Error log
         return {"error": str(e)}
