@@ -169,61 +169,51 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
 async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: int = None) -> None:
     if amount is None:
         if context.user_data.get('state') != 'waiting_for_custom_amount':
-            await update.message.reply_text("Please select a purchase option first.")
+            await send_message(update, "Please select a purchase option first.")
             return
         try:
             amount = int(update.message.text)
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            await update.message.reply_text("Please enter a valid positive number.")
+            await send_message(update, "Please enter a valid positive number.")
             return
 
     user_id = update.effective_user.id
     user = get_user(user_id)
-    
+
     price_uzs = calculate_price(amount)
-    
+
     # Create a unique order ID
     order_id = str(uuid.uuid4())
-    
+
     # Create a transaction using Payme API
     transaction_data = await create_transaction(price_uzs, order_id)
-    
+
     if transaction_data.get('result'):
         transaction_id = transaction_data['result']['transaction']
         payment_url = f"https://checkout.paycom.uz/{PAYCOM_MERCHANT_ID}/{transaction_id}"
-        
+
         context.user_data['pending_order'] = {
             'transaction_id': transaction_id,
             'amount': amount,
             'order_id': order_id
         }
-        
+
         keyboard = [[InlineKeyboardButton("Pay Now", url=payment_url)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        if update.callback_query:
-            await update.callback_query.edit_message_text(
-                f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
-                f"Click the button below to proceed with the payment:",
-                reply_markup=reply_markup
-            )
-        else:
-            await update.message.reply_text(
-                f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
-                f"Click the button below to proceed with the payment:",
-                reply_markup=reply_markup
-            )
-        
+
+        await send_message(update,
+                           f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
+                           f"Click the button below to proceed with the payment:",
+                           reply_markup=reply_markup
+                           )
+
         # Start periodic payment check
         asyncio.create_task(periodic_payment_check(update, context))
     else:
         error_message = "Sorry, there was an error creating the transaction. Please try again later."
-        if update.callback_query:
-            await update.callback_query.edit_message_text(error_message)
-        else:
-            await update.message.reply_text(error_message)
+        await send_message(update, error_message)
 
     context.user_data['state'] = None  # Reset state after handling purchase
 
