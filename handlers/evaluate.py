@@ -14,6 +14,10 @@ async def handle_essay(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     topic = context.user_data.get('topic')
     essay = update.message.text
 
+    # Check if the user's state is still 'waiting_for_topic'
+    if context.user_data.get('state') != 'waiting_for_topic':
+        return
+
     # Check and decrement uses before making the API call
     if await check_and_decrement_uses(user_id):
         analysis_result = await essay_analysis.analyze_essay(topic, essay)
