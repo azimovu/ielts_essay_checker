@@ -187,32 +187,39 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
     # Create a unique order ID
     order_id = str(uuid.uuid4())
 
-    # Create a transaction using Payme API
-    transaction_data = await create_transaction(price_uzs, order_id)
+    try:
+        # Create a transaction using Payme API
+        transaction_data = await create_transaction(price_uzs, order_id)
+        print(f"Transaction Data: {transaction_data}")  # Debugging log
 
-    if transaction_data.get('result'):
-        transaction_id = transaction_data['result']['transaction']
-        payment_url = f"https://checkout.paycom.uz/{PAYCOM_MERCHANT_ID}/{transaction_id}"
+        if transaction_data.get('result'):
+            transaction_id = transaction_data['result']['transaction']
+            payment_url = f"https://checkout.paycom.uz/{PAYCOM_MERCHANT_ID}/{transaction_id}"
 
-        context.user_data['pending_order'] = {
-            'transaction_id': transaction_id,
-            'amount': amount,
-            'order_id': order_id
-        }
+            context.user_data['pending_order'] = {
+                'transaction_id': transaction_id,
+                'amount': amount,
+                'order_id': order_id
+            }
 
-        keyboard = [[InlineKeyboardButton("Pay Now", url=payment_url)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+            keyboard = [[InlineKeyboardButton("Pay Now", url=payment_url)]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await send_message(update,
-                           f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
-                           f"Click the button below to proceed with the payment:",
-                           reply_markup=reply_markup
-                           )
+            await send_message(update,
+                               f"Great! You're purchasing {amount} uses for {price_uzs} UZS. "
+                               f"Click the button below to proceed with the payment:",
+                               reply_markup=reply_markup
+                               )
 
-        # Start periodic payment check
-        asyncio.create_task(periodic_payment_check(update, context))
-    else:
-        error_message = "Sorry, there was an error creating the transaction. Please try again later."
+            # Start periodic payment check
+            asyncio.create_task(periodic_payment_check(update, context))
+        else:
+            error_message = f"Error in transaction creation: {transaction_data.get('error', 'Unknown error')}"
+            print(error_message)  # Error log
+            await send_message(update, error_message)
+    except Exception as e:
+        error_message = f"Exception during transaction creation: {e}"
+        print(error_message)  # Exception log
         await send_message(update, error_message)
 
     context.user_data['state'] = None  # Reset state after handling purchase
