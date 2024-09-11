@@ -3,7 +3,7 @@ import json
 import aiohttp
 from config import PAYCOM_MERCHANT_ID, PAYCOM_SECRET_KEY
 
-PAYCOM_API_URL = 'https://checkout.paycom.uz'
+PAYCOM_API_URL = 'https://checkout.paycom.uz/api'
 
 async def generate_auth_header():
     auth_token = f"{PAYCOM_MERCHANT_ID}:{PAYCOM_SECRET_KEY}"

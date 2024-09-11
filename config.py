@@ -18,6 +18,6 @@ CLICK_SECRET_KEY = os.getenv('CLICK_SECRET_KEY')
 CLICK_MERCHANT_USER_ID = os.getenv('CLICK_MERCHANT_USER_ID')
 
 
-#payme config
+# Payme config
 PAYCOM_MERCHANT_ID = os.getenv('PAYCOM_MERCHANT_ID')
 PAYCOM_SECRET_KEY = os.getenv('PAYCOM_SECRET_KEY')
