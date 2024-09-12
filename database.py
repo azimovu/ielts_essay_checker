@@ -53,6 +53,62 @@ def create_table(conn):
     except Error as e:
         print(e)
 
+def create_transaction_table(conn):
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                amount INTEGER,
+                state INTEGER,
+                create_time INTEGER,
+                perform_time INTEGER,
+                cancel_time INTEGER,
+                reason TEXT,
+                order_id TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+    except Error as e:
+        print(e)
+
+def add_transaction(transaction_id, user_id, amount, state, create_time, order_id):
+    conn = create_connection()
+    sql = '''INSERT INTO transactions(id, user_id, amount, state, create_time, order_id)
+             VALUES(?, ?, ?, ?, ?, ?)'''
+    cur = conn.cursor()
+    cur.execute(sql, (transaction_id, user_id, amount, state, create_time, order_id))
+    conn.commit()
+    conn.close()
+
+def get_transaction(transaction_id):
+    conn = create_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,))
+    transaction = cur.fetchone()
+    conn.close()
+    return transaction
+
+def update_transaction(transaction_id, state, perform_time=None, cancel_time=None, reason=None):
+    conn = create_connection()
+    sql = '''UPDATE transactions
+             SET state = ?, perform_time = ?, cancel_time = ?, reason = ?
+             WHERE id = ?'''
+    cur = conn.cursor()
+    cur.execute(sql, (state, perform_time, cancel_time, reason, transaction_id))
+    conn.commit()
+    conn.close()
+
+
+def get_order(order_id):
+    conn = create_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM transactions WHERE order_id = ?", (order_id,))
+    order = cur.fetchone()
+    conn.close()
+    return order
+
 def increment_usage_count(user_id):
     conn = create_connection()
     sql = ''' UPDATE users SET usage_count = usage_count + 1 WHERE id = ? '''
@@ -137,6 +193,7 @@ def add_purchased_uses(user_id, amount):
 conn = create_connection()
 if conn is not None:
     create_table(conn)
+    create_transaction_table(conn)
     conn.close()
 else:
     print("Error! Cannot create the database connection.")
