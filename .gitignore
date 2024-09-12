@@ -17,3 +17,5 @@ venv/
 *.db
 tree*
 .aider*
+
+*payme dev*
