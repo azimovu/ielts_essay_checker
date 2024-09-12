@@ -69,10 +69,24 @@ def handle_paycom_request():
         return jsonify({'error': {'code': -32601, 'message': 'Method not found'}})
 
 def check_perform_transaction(params):
-    # Здесь вы можете добавить логику для проверки возможности выполнения транзакции
-    # Например, проверить наличие товара, баланс пользователя и т.д.
-    # В этом примере мы всегда разрешаем выполнение транзакции
-    return jsonify({"result": {"allow": True}})
+    account = params.get('account', {})
+    amount = params.get('amount')
+    
+    user_id = account.get('user_id')
+    if not user_id:
+        return jsonify({"result": {"allow": False}, "error": {"code": -31050, "message": "User ID not provided"}})
+    
+    user = get_user(user_id)
+    if not user:
+        return jsonify({"result": {"allow": False}, "error": {"code": -31050, "message": "User not found"}})
+    
+    total_uses = user[3] + user[4]  # free_uses_left + purchased_uses
+    requested_uses = amount // 100  # Предполагаем, что 1 использование стоит 100 единиц валюты
+    
+    if total_uses >= requested_uses:
+        return jsonify({"result": {"allow": True}})
+    else:
+        return jsonify({"result": {"allow": False}, "error": {"code": -31001, "message": "Insufficient uses"}})
 
 def check_transaction(params):
     transaction_id = params.get('id')
@@ -111,31 +125,23 @@ def create_transaction(params):
         else:
             return jsonify({'error': {'code': -31008, 'message': 'Unable to complete operation'}})
     
-    order_id = account.get('order_id')
-    order = get_order(order_id)
+    user_id = account.get('user_id')
+    if not user_id:
+        return jsonify({'error': {'code': -31050, 'message': 'User ID not provided'}})
     
-    if not order:
-        # Создаем новую транзакцию, даже если заказ не найден
-        user_id = account.get('user_id')  # Предполагаем, что user_id передается в account
-        if not user_id:
-            return jsonify({'error': {'code': -31050, 'message': 'User ID not provided'}})
-        
-        # Здесь вы можете добавить дополнительную логику для создания заказа, если это необходимо
-        
-        add_transaction(transaction_id, user_id, amount, 1, time_param, order_id)
-        
-        return jsonify({
-            "result": {
-                "create_time": time_param,
-                "transaction": transaction_id,
-                "state": 1
-            }
-        })
+    user = get_user(user_id)
+    if not user:
+        return jsonify({'error': {'code': -31050, 'message': 'User not found'}})
     
-    if order[2] != amount:
-        return jsonify({'error': {'code': -31001, 'message': 'Invalid amount'}})
+    # Проверяем, достаточно ли у пользователя использований
+    total_uses = user[3] + user[4]  # free_uses_left + purchased_uses
+    requested_uses = amount // 100  # Предполагаем, что 1 использование стоит 100 единиц валюты
     
-    add_transaction(transaction_id, order[1], amount, 1, time_param, order_id)
+    if total_uses < requested_uses:
+        return jsonify({'error': {'code': -31001, 'message': 'Insufficient uses'}})
+    
+    # Создаем новую транзакцию
+    add_transaction(transaction_id, user_id, amount, 1, time_param, None)
     
     return jsonify({
         "result": {
