@@ -62,9 +62,17 @@ def handle_paycom_request():
         return perform_transaction(params)
     elif method == 'CancelTransaction':
         return cancel_transaction(params)
+    elif method == 'CheckPerformTransaction':
+        return check_perform_transaction(params)
     else:
         logger.warning(f'Unknown method in Paycom request: {method}')
         return jsonify({'error': {'code': -32601, 'message': 'Method not found'}})
+
+def check_perform_transaction(params):
+    # Здесь вы можете добавить логику для проверки возможности выполнения транзакции
+    # Например, проверить наличие товара, баланс пользователя и т.д.
+    # В этом примере мы всегда разрешаем выполнение транзакции
+    return jsonify({"result": {"allow": True}})
 
 def check_transaction(params):
     transaction_id = params.get('id')
@@ -103,14 +111,31 @@ def create_transaction(params):
         else:
             return jsonify({'error': {'code': -31008, 'message': 'Unable to complete operation'}})
     
-    order = get_order(account.get('order_id'))
+    order_id = account.get('order_id')
+    order = get_order(order_id)
+    
     if not order:
-        return jsonify({'error': {'code': -31050, 'message': 'Order not found'}})
+        # Создаем новую транзакцию, даже если заказ не найден
+        user_id = account.get('user_id')  # Предполагаем, что user_id передается в account
+        if not user_id:
+            return jsonify({'error': {'code': -31050, 'message': 'User ID not provided'}})
+        
+        # Здесь вы можете добавить дополнительную логику для создания заказа, если это необходимо
+        
+        add_transaction(transaction_id, user_id, amount, 1, time_param, order_id)
+        
+        return jsonify({
+            "result": {
+                "create_time": time_param,
+                "transaction": transaction_id,
+                "state": 1
+            }
+        })
     
     if order[2] != amount:
         return jsonify({'error': {'code': -31001, 'message': 'Invalid amount'}})
     
-    add_transaction(transaction_id, order[1], amount, 1, time_param, account.get('order_id'))
+    add_transaction(transaction_id, order[1], amount, 1, time_param, order_id)
     
     return jsonify({
         "result": {
