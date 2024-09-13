@@ -114,16 +114,13 @@ def create_transaction(params):
     
     existing_transaction = get_transaction(transaction_id)
     if existing_transaction:
-        if existing_transaction[3] == 1:  # Transaction already created
-            return jsonify({
-                "result": {
-                    "create_time": existing_transaction[5],
-                    "transaction": existing_transaction[0],
-                    "state": existing_transaction[3]
-                }
-            })
-        else:
-            return jsonify({'error': {'code': -31008, 'message': 'Unable to complete operation'}})
+        return jsonify({
+            "result": {
+                "create_time": existing_transaction[4],  # Index 4 is create_time
+                "transaction": existing_transaction[0],  # Index 0 is id
+                "state": existing_transaction[3]         # Index 3 is state
+            }
+        })
     
     user_id = account.get('user_id')
     if not user_id:

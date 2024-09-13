@@ -1,9 +1,9 @@
 import sqlite3
 from sqlite3 import Error
-from config import DB_NAME
+from config import DB_NAME, TRANSACTIONS_DB_NAME
 
 def migrate_database():
-    conn = create_connection()
+    conn = create_connection(DB_NAME)
     if conn is not None:
         try:
             cursor = conn.cursor()
@@ -29,10 +29,10 @@ def migrate_database():
     else:
         print("Error! Cannot create the database connection.")
 
-def create_connection():
+def create_connection(db_name):
     conn = None
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(db_name)
         return conn
     except Error as e:
         print(e)
@@ -53,7 +53,8 @@ def create_table(conn):
     except Error as e:
         print(e)
 
-def create_transaction_table(conn):
+def create_transaction_table():
+    conn = create_connection(TRANSACTIONS_DB_NAME)
     try:
         cursor = conn.cursor()
         cursor.execute('''
@@ -66,15 +67,17 @@ def create_transaction_table(conn):
                 perform_time INTEGER,
                 cancel_time INTEGER,
                 reason TEXT,
-                order_id TEXT,
-                FOREIGN KEY (user_id) REFERENCES users (id)
+                order_id TEXT
             )
         ''')
+        conn.commit()
     except Error as e:
         print(e)
+    finally:
+        conn.close()
 
 def add_transaction(transaction_id, user_id, amount, state, create_time, order_id):
-    conn = create_connection()
+    conn = create_connection(TRANSACTIONS_DB_NAME)
     sql = '''INSERT INTO transactions(id, user_id, amount, state, create_time, order_id)
              VALUES(?, ?, ?, ?, ?, ?)'''
     cur = conn.cursor()
@@ -83,7 +86,7 @@ def add_transaction(transaction_id, user_id, amount, state, create_time, order_i
     conn.close()
 
 def get_transaction(transaction_id):
-    conn = create_connection()
+    conn = create_connection(TRANSACTIONS_DB_NAME)
     cur = conn.cursor()
     cur.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,))
     transaction = cur.fetchone()
@@ -91,7 +94,7 @@ def get_transaction(transaction_id):
     return transaction
 
 def update_transaction(transaction_id, state, perform_time=None, cancel_time=None, reason=None):
-    conn = create_connection()
+    conn = create_connection(TRANSACTIONS_DB_NAME)
     sql = '''UPDATE transactions
              SET state = ?, perform_time = ?, cancel_time = ?, reason = ?
              WHERE id = ?'''
@@ -100,9 +103,8 @@ def update_transaction(transaction_id, state, perform_time=None, cancel_time=Non
     conn.commit()
     conn.close()
 
-
 def get_order(order_id):
-    conn = create_connection()
+    conn = create_connection(TRANSACTIONS_DB_NAME)
     cur = conn.cursor()
     cur.execute("SELECT * FROM transactions WHERE order_id = ?", (order_id,))
     order = cur.fetchone()
@@ -189,11 +191,12 @@ def add_purchased_uses(user_id, amount):
     conn.commit()
     conn.close()
 
-# Initialize the database
-conn = create_connection()
-if conn is not None:
-    create_table(conn)
-    create_transaction_table(conn)
-    conn.close()
+# Initialize the databases
+conn_users = create_connection(DB_NAME)
+if conn_users is not None:
+    create_table(conn_users)
+    conn_users.close()
 else:
-    print("Error! Cannot create the database connection.")
+    print("Error! Cannot create the users database connection.")
+
+create_transaction_table()
