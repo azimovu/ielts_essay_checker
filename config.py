@@ -9,6 +9,7 @@ ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Database configuration
 DB_NAME = 'users.db'
+TRANSACTIONS_DB_NAME = 'transactions.db'
 
 # Click config
 

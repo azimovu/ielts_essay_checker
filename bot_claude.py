@@ -8,6 +8,7 @@ from database import migrate_database
 from utils.paycom_integration import create_transaction
 from config import PAYCOM_MERCHANT_ID
 from handlers.start import handle_contact_shared
+from user import add_balance, deduct_balance, get_user, add_referral
 import threading
 import asyncio
 
@@ -72,6 +73,7 @@ def main() -> None:
     application.add_handler(CommandHandler("check_uses", user_management.handle_check_remaining_uses))
     application.add_handler(CommandHandler("purchase", user_management.show_purchase_options))
     application.add_handler(CommandHandler("verify_payment", user_management.verify_payment))
+    application.add_handler(CommandHandler("balance", handle_balance))
 
     application.add_handler(MessageHandler(filters.Regex('^Evaluate$'), user_management.handle_message))
     application.add_handler(MessageHandler(filters.Regex('^Feedback$'), user_management.handle_message))
@@ -90,6 +92,16 @@ def main() -> None:
     application.add_handler(PreCheckoutQueryHandler(pre_checkout_update))
 
     application.run_polling()
+
+async def handle_balance(update: Updater, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the /balance command."""
+    user_id = update.effective_user.id
+    user = get_user(user_id)
+    if user:
+        balance = user[5]  # Assuming balance is at index 5 in the user tuple
+        await update.message.reply_text(f"Your current balance is: {balance}")
+    else:
+        await update.message.reply_text("User not found. Please start the bot with /start command.")
 
 if __name__ == '__main__':
     main()

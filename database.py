@@ -47,7 +47,9 @@ def create_table(conn):
                 phone_number TEXT,
                 usage_count INTEGER DEFAULT 0,
                 free_uses_left INTEGER DEFAULT 3,
-                purchased_uses INTEGER DEFAULT 0
+                purchased_uses INTEGER DEFAULT 0,
+                referrals INTEGER DEFAULT 0,
+                referrer_id INTEGER
             )
         ''')
     except Error as e:

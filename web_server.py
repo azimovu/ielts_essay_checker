@@ -4,11 +4,12 @@ import hashlib
 import time
 from database import (
     add_purchased_uses, get_user, update_transaction, get_transaction,
-    get_order, add_transaction
+    get_order, add_transaction, get_free_uses_left, get_purchased_uses
 )
 import logging
 from logging.handlers import RotatingFileHandler
 from waitress import serve
+import traceback
 
 app = Flask(__name__)
 
@@ -23,6 +24,12 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 
 logger.addHandler(handler)
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(f"Unhandled exception: {str(e)}")
+    logger.error(traceback.format_exc())
+    return jsonify({"error": "An internal server error occurred"}), 500
 
 def verify_paycom_request(request_data):
     auth_header = request.headers.get('Authorization')
@@ -64,9 +71,29 @@ def handle_paycom_request():
         return cancel_transaction(params)
     elif method == 'CheckPerformTransaction':
         return check_perform_transaction(params)
+    elif method == 'CheckRemainingUses':
+        return check_remaining_uses(params)
     else:
         logger.warning(f'Unknown method in Paycom request: {method}')
         return jsonify({'error': {'code': -32601, 'message': 'Method not found'}})
+
+def check_remaining_uses(params):
+    account = params.get('account', {})
+    user_id = account.get('user_id')
+    
+    if not user_id:
+        return jsonify({"error": {"code": -31050, "message": "User ID not provided"}})
+    
+    free_uses = get_free_uses_left(user_id)
+    purchased_uses = get_purchased_uses(user_id)
+    
+    return jsonify({
+        "result": {
+            "free_uses": free_uses,
+            "purchased_uses": purchased_uses,
+            "total_uses": free_uses + purchased_uses
+        }
+    })
 
 def check_perform_transaction(params):
     account = params.get('account', {})
