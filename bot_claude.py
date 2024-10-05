@@ -8,8 +8,7 @@ from database import migrate_database
 from utils.paycom_integration import create_transaction
 from config import PAYCOM_MERCHANT_ID
 from handlers.start import handle_contact_shared
-from user import add_balance, deduct_balance, get_user, add_referral
-import threading
+from database import get_user
 import asyncio
 
 # Enable logging
@@ -61,9 +60,8 @@ def main() -> None:
     # Run database migration
     migrate_database()
     
-    # Run Flask in a separate thread
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
+    # Run Flask directly
+    run_flask()
 
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
