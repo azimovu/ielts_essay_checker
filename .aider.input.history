@@ -1,0 +1,242 @@
+
+# 2024-09-11 10:45:39.979501
++so this repo is a telegram bot file and it has a bug in which after user clicks evaluate, and after that any other button, it will still try to perform evaliuate request and send api request. You need to fix this
+
+# 2024-09-11 10:47:37.041794
++ok try again
+
+# 2024-09-11 10:47:55.799639
++clearly it's not working
+
+# 2024-09-11 10:50:51.742423
++ok try one more time
+
+# 2024-09-11 10:52:03.302035
++/run git add handlers/evaluate.py
+
+# 2024-09-11 10:52:03.422585
++/run git commit -m "fix: Move state reset to before API call in handle_essay function"
+
+# 2024-09-11 10:53:08.843912
++there's another bug in this repo, as when user wants to purchase more uses, the invoice creation is not working
+
+# 2024-09-11 10:55:22.035442
++try one more time
+
+# 2024-09-11 10:59:08.221231
++it's not working!!!
+
+# 2024-09-11 11:03:19.086423
++so in this telegram bot we have bug with creating invoices
+
+# 2024-09-11 11:05:04.638479
++i'm trying to make integration with payme
+
+# 2024-09-11 11:06:22.730458
++utils\user_management.py
+
+# 2024-09-11 11:07:19.253148
++utils\paycom_integration.py
+
+# 2024-09-11 11:09:02.895782
++here is the file
+
+# 2024-09-11 11:13:18.210983
++bot_claude.py
+
+# 2024-09-11 11:14:24.511669
++config.py
+
+# 2024-09-11 11:14:55.409576
++`user_management`
+
+# 2024-09-11 11:15:17.426238
++utils\user_management.py
+
+# 2024-09-11 11:15:44.592283
++Here you go
+
+# 2024-09-11 11:16:25.389578
++it just doesn't create an invoice. When I press it doesn't respond
+
+# 2024-09-11 11:16:48.117028
++do it
+
+# 2024-09-11 11:21:35.776685
++so i have a telegram bot repo, and there's bug with creating invoices. When I click `purchase more uses` it doesn't respond and create an invoice
+
+# 2024-09-11 11:22:49.871311
++ok now try to fix it
+
+# 2024-09-11 11:24:30.776317
++now my bot_claude.py
+
+# 2024-09-11 11:25:11.680370
++Now my bot_claude.py file has some problems bot_claude.py
+
+# 2024-09-11 11:25:34.909222
++bot_claude.py
+
+# 2024-09-11 11:26:15.521094
++bot
+
+# 2024-09-11 11:26:47.308355
++bot_claude.py file has some problems in it. Fix it bot_claude.py
+
+# 2024-09-11 11:37:11.804092
++creating invoices is not working in my bot
+
+# 2024-09-11 11:39:37.066351
++so i have this telegram bot and it's creating invoices function is not working. It just won't respond at all. Help me fix it 
+
+# 2024-09-11 11:39:49.679131
++utils\paycom_integration.py
+
+# 2024-09-11 11:40:25.219553
++utils\user_management.py
+
+# 2024-09-11 11:40:47.923011
++bot_claude.py
+
+# 2024-09-11 11:43:49.484022
++it's giving error `Error in transaction creation: 200, message='Attempt to decode JSON with unexpected mimetype: ', url='https://checkout.paycom.uz'` 
+
+# 2024-09-11 11:46:38.512218
++now another error 
+
+# 2024-09-11 11:46:44.938688
++Error in transaction creation: Unexpected response format: 200, <!DOCTYPE html>
++<html>
++<head>
++    <title>Paycom - ошибка</title>
++    <meta charset="utf-8">
++    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
++
++    <style type="text/css">
++        html {
++            background: #f6f6f6;
++            height: 100%;
++        }
++
++        body {
++            font-family: Arial, sans-serif;
++            font-size: 12px;
++            color: #384348;
++            margin: 0;
++        }
++
++        .header {
++            background: #fefefe;
++            padding: 15px 0;
++            text-align: center;
++
++            box-shadow: 0 0 4px 4px rgba(148, 148, 148, .08);
++        }
++
++        .logo {
++            width: 147px;
++            height: auto;
++        }
++
++        .content {
++            padding: 55px 25px;
++            text-align: center;
++        }
++
++        .error {
++            margin: 0 auto;
++
++            max-width: 540px;
++
++            overflow: hidden;
++
++            background: #fff7f7;
++            border: 1px solid #ffc8c8;
++            border-radius: 6px;
++        }
++
++        .error-icon {
++            height: 40px;
++            margin-top: 25px;
++
++            background: url("/img/error-icon.png") center no-repeat;
++            background-size: 40px;
++        }
++
++        .error-message {
++            font-size: 26px;
++            text-align: center;
++
++            margin: 25px;
++        }
++
++        .back-button {
++            display: inline-block;
++
++            margin-top: 50px;
++            padding: 20px;
++            min-width: 195px;
++
++            background: #fff;
++
++            font-size: 16px;
++            color: #384348;
++            text-decoration: none;
++            text-align: center;
++
++            border-radius: 4px;
++
++            box-shadow: 0 1px 2px 0 #e2e2e2;
++
++            transition: box-shadow 0.2s;
++        }
++
++        .back-button:hover {
++            box-shadow: 0 3px 4px 0 #e2e2e2;
++            transition: box-shadow 0.1s;
++        }
++    </style>
++</head>
++<body>
++
++<div class="header">
++    <img class="logo" src="/img/logo.png" />
++    <div>Банковский платежный интегратор</div>
++</div>
++
++<div class="content">
++    <div class="error">
++        <div class="error-icon"></div>
++        <p class="error-message">Merchant id is not defined</p>
++    </div>
++</div>
++
++</body>
++</html>
+
+# 2024-09-12 15:00:50.896707
++1. in web_server.py file we shoulda add new methed CheckPerformTransaction which should return json: {"result":{"allow": boolean (true or false)}}. 2. create_transaction function is just returning "Order not found" even when we want to create a new transaction. We should fix it so it creates a new transaction if there doesn't already exist such transaction. All transactions should be according to `payme dev.pdf`
+
+# 2024-09-13 14:20:34.712876
++1. transactions.db is not created. Let's fix that and store all the transactions in transactions.db so we can check if transaction exists, create it, perform it and if it already exists we can refuse to do it second time. 2. CreateTransaction method when responded with the same message twice just giving create_time: null. it should return `create_time` from the first time 
+
+# 2024-09-13 14:22:09.336318
++/run python -c "from database import create_transaction_table; create_transaction_table()"
+
+# 2024-09-13 14:24:25.172440
++/run python -c "from database import create_transaction_table; create_transaction_table()"
+
+# 2024-09-16 12:34:08.520852
++now my server is just returning 500 when I want to make a payments. Also it's not responding to `Check Remaining Uses` 
+
+# 2024-09-16 12:34:36.873121
++/run python web_server.py
+
+# 2024-09-16 12:39:00.439324
++bot_claude.py
+
+# 2024-09-16 12:39:31.147073
++`user_management`
+
+# 2024-09-16 12:41:25.740345
++so we need to create the transactions database inside database.py just like users.db not with seperate command
