@@ -1,6 +1,5 @@
 python-telegram-bot
 requests
 python-dotenv
+sqlite3
 anthropic
-waitress
-aiohttp

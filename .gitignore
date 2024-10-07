@@ -14,8 +14,12 @@ __pycache__/
 venv/
 
 # Ignore
+<<<<<<< HEAD
 *.db
 tree*
 .aider*
 
 *payme dev*
+=======
+*.db
+>>>>>>> parent of 9a0fe3a (changed the click/-integration process)
