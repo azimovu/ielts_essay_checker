@@ -5,8 +5,8 @@ from enum import Enum
 import time
 
 class TransactionState(Enum):
-    PENDING = 0
-    PAID = 1
+    PENDING = 1
+    PAID = 2
     CANCELLED = -1
     FAILED = -2
 

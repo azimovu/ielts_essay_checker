@@ -70,6 +70,15 @@ def handle_create_transaction(params: Dict[str, Any]) -> Dict[str, Any]:
         amount = params.get('amount')
         paycom_time = params.get('time')
         paycom_id = params.get('id')
+
+        user = get_user(user_id)
+        if not user:
+            return {
+                'error': {
+                    'code': -31050,
+                    'message': 'User not found'
+                }
+            }
         
         existing_transaction = get_transaction_by_paycom_id(paycom_id)
         if existing_transaction:
