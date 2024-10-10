@@ -160,7 +160,7 @@ def add_purchased_uses(user_id, amount):
 
 
 # Transaction-related functions
-def create_transaction(user_id: int, paycom_transaction_id: str, amount: int, uses: int) -> int:
+def create_transaction(user_id: int, paycom_transaction_id: str, amount: int, uses: int, create_time: int) -> int:
     """Create a new transaction record"""
     conn = create_connection()
     try:
@@ -198,7 +198,7 @@ def get_transaction_by_paycom_id(paycom_transaction_id: str) -> tuple:
         conn.close()
 
 def update_transaction_status(paycom_transaction_id: str, state: TransactionState, 
-                            perform_time: int = None, cancel_time: int = None, 
+                            perform_time: int = 0, cancel_time: int = 0, 
                             reason: int = None) -> bool:
     """Update transaction status and related fields"""
     conn = create_connection()

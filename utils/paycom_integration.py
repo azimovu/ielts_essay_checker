@@ -64,7 +64,8 @@ class PaycomIntegration:
                 user_id=user_id,
                 paycom_transaction_id=data["result"]["invoice_id"],
                 amount=amount,
-                uses=uses
+                uses=uses,
+                create_time=data["resul"]["create_time"]
             )
                 
             return data["result"]["invoice_id"], data["result"]["payment_url"]
