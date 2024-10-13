@@ -2,13 +2,16 @@ import sqlite3
 from sqlite3 import Error
 from config import DB_NAME
 from enum import Enum
+import logging
 import time
 
 class TransactionState(Enum):
-    PENDING = 1
-    PAID = 2
-    CANCELLED = -1
-    FAILED = -2
+    PENDING = 0      # Waiting
+    CREATED = 1      # Transaction saved
+    PAID = 2         # Transaction confirmed and completed
+    CANCELLED = -1   # Unpaid transaction cancelled
+    CANCELLED_PAID = -2  # Paid transaction cancelled
+
 
 def migrate_database():
     conn = create_connection()
@@ -21,26 +24,26 @@ def migrate_database():
             columns = [column[1] for column in cursor.fetchall()]
             
             if 'free_uses_left' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN free_uses_left INTEGER DEFAULT 3")
+                cursor.execute("ALTER TABLE users ADD COLUMN free_uses_left INTEGER DEFAULT 0 NOT NULL")
             if 'purchased_uses' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN purchased_uses INTEGER DEFAULT 0")
+                cursor.execute("ALTER TABLE users ADD COLUMN purchased_uses INTEGER DEFAULT 0 NOT NULL")
             if 'usage_count' not in columns:
-                cursor.execute("ALTER TABLE users ADD COLUMN usage_count INTEGER DEFAULT 0")
+                cursor.execute("ALTER TABLE users ADD COLUMN usage_count INTEGER DEFAULT 0 NOT NULL")
             
-            # Create transactions table
+            # Drop existing transactions table if it exists and create new one with proper defaults
+            cursor.execute("DROP TABLE IF EXISTS transactions")
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS transactions (
+                CREATE TABLE transactions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    paycom_transaction_id TEXT UNIQUE,
-                    paycom_time TEXT,
-                    paycom_state INTEGER,
-                    user_id INTEGER,
-                    amount INTEGER,
-                    uses INTEGER,
-                    create_time INTEGER,
-                    perform_time INTEGER,
-                    cancel_time INTEGER,
-                    reason INTEGER,
+                    paycom_transaction_id TEXT UNIQUE NOT NULL,
+                    paycom_state INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    amount INTEGER NOT NULL,
+                    uses INTEGER NOT NULL,
+                    create_time INTEGER NOT NULL,
+                    perform_time INTEGER DEFAULT 0 NOT NULL,
+                    cancel_time INTEGER DEFAULT 0 NOT NULL,
+                    reason INTEGER DEFAULT NULL,
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
@@ -53,6 +56,29 @@ def migrate_database():
             conn.close()
     else:
         print("Error! Cannot create the database connection.")
+
+def create_transaction(user_id: int, paycom_transaction_id: str, amount: int, uses: int, create_time: int) -> int:
+    """Create a new transaction record with initial state"""
+    conn = create_connection()
+    try:
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO transactions (
+                paycom_transaction_id, user_id, amount, uses, 
+                paycom_state, create_time, perform_time, cancel_time
+            ) VALUES (?, ?, ?, ?, ?, ?, 0, 0)
+        ''', (paycom_transaction_id, user_id, amount, uses, 
+              TransactionState.CREATED.value, create_time))
+        
+        transaction_id = cursor.lastrowid
+        conn.commit()
+        return transaction_id
+    except Error as e:
+        print(e)
+        raise
+    finally:
+        conn.close()
 
 def create_connection():
     conn = None
@@ -70,9 +96,9 @@ def create_table(conn):
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY,
                 phone_number TEXT,
-                usage_count INTEGER DEFAULT 0,
-                free_uses_left INTEGER DEFAULT 3,
-                purchased_uses INTEGER DEFAULT 0
+                usage_count INTEGER DEFAULT 0 NOT NULL,
+                free_uses_left INTEGER DEFAULT 0 NOT NULL,
+                purchased_uses INTEGER DEFAULT 0 NOT NULL
             )
         ''')
     except Error as e:
@@ -158,8 +184,8 @@ def add_purchased_uses(user_id, amount):
     conn.commit()
     conn.close()
 
-
-# Transaction-related functions
+'''
+Transaction-related functions
 def create_transaction(user_id: int, paycom_transaction_id: str, amount: int, uses: int, create_time: int) -> int:
     """Create a new transaction record"""
     conn = create_connection()
@@ -167,12 +193,12 @@ def create_transaction(user_id: int, paycom_transaction_id: str, amount: int, us
         cursor = conn.cursor()
         current_time = int(time.time() * 1000)  # Paycom uses millisecond timestamps
         
-        cursor.execute('''
+        cursor.execute(
             INSERT INTO transactions (
                 paycom_transaction_id, user_id, amount, uses, 
                 paycom_state, create_time
             ) VALUES (?, ?, ?, ?, ?, ?)
-        ''', (paycom_transaction_id, user_id, amount, uses, 
+        , (paycom_transaction_id, user_id, amount, uses, 
               TransactionState.PENDING.value, current_time))
         
         transaction_id = cursor.lastrowid
@@ -183,7 +209,8 @@ def create_transaction(user_id: int, paycom_transaction_id: str, amount: int, us
         raise
     finally:
         conn.close()
-
+'''
+        
 def get_transaction_by_paycom_id(paycom_transaction_id: str) -> tuple:
     """Get transaction details by Paycom transaction ID"""
     conn = create_connection()
