@@ -5,7 +5,7 @@ import base64
 from typing import Dict, Any
 from database import (
     TransactionState, create_transaction, get_transaction_by_paycom_id,
-    update_transaction_status, get_user, add_purchased_uses
+    update_transaction_status, get_user, add_purchased_uses, get_transactions_in_range
 )
 
 
@@ -169,8 +169,7 @@ def handle_create_transaction(params: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
-def handle_perform_transaction(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle PerformTransaction request"""
+def handle_perform_transaction(params):
     try:
         paycom_id = params.get('id')
         
@@ -184,17 +183,17 @@ def handle_perform_transaction(params: Dict[str, Any]) -> Dict[str, Any]:
             }
         
         # If already paid (state 2), return the same response
-        if transaction[2] == 2:  # If already paid
+        if transaction[2] == TransactionState.PAID.value:
             return {
                 'result': {
                     'transaction': str(transaction[0]),
-                    'perform_time': int(transaction[7]),  # Return stored perform_time
-                    'state': 2
+                    'perform_time': int(transaction[7]),
+                    'state': TransactionState.PAID.value
                 }
             }
         
-        # Only proceed if transaction is in state 1 (saved)
-        if transaction[2] != 1:
+        # Only proceed if transaction is in CREATED state
+        if transaction[2] != TransactionState.CREATED.value:
             return {
                 'error': {
                     'code': -31008,
@@ -210,18 +209,14 @@ def handle_perform_transaction(params: Dict[str, Any]) -> Dict[str, Any]:
             cancel_time=0  # Explicitly set cancel_time to 0
         )
         
-        # Add purchased uses only after successful payment
-        add_purchased_uses(transaction[2], transaction[5])  # user_id and uses
-        
         return {
             'result': {
                 'transaction': str(transaction[0]),
                 'perform_time': current_time,
-                'state': 2  # State 2 indicates successful payment
+                'state': TransactionState.PAID.value
             }
         }
     except Exception as e:
-        logger.error(f"Error in perform transaction: {str(e)}")
         return {
             'error': {
                 'code': -31008,
@@ -229,8 +224,7 @@ def handle_perform_transaction(params: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
 
-def handle_cancel_transaction(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle CancelTransaction request"""
+def handle_cancel_transaction(params):
     try:
         paycom_id = params.get('id')
         reason = params.get('reason')
@@ -244,25 +238,84 @@ def handle_cancel_transaction(params: Dict[str, Any]) -> Dict[str, Any]:
                 }
             }
         
+        # Check if the transaction is already in a final state
+        if transaction[2] in [TransactionState.PAID.value]:
+            return {
+                'error': {
+                    'code': -31007,
+                    'message': 'Unable to cancel transaction in final state'
+                }
+            }
+        
         current_time = int(time.time() * 1000)
+        
+        # Only update cancel_time if it's not already set
+        cancel_time = transaction[8] or current_time
         
         update_transaction_status(
             paycom_id,
             TransactionState.CANCELLED,
             perform_time=0,  # Set perform_time to 0 when cancelling
-            cancel_time=current_time,
-            reason=reason  # reason can be null
+            cancel_time=cancel_time,
+            reason=reason
         )
         
         return {
             'result': {
                 'transaction': str(transaction[0]),
-                'cancel_time': current_time,
-                'state': -1  # State -1 indicates cancelled transaction
+                'cancel_time': cancel_time,
+                'state': TransactionState.CANCELLED.value
             }
         }
     except Exception as e:
-        logger.error(f"Error in cancel transaction: {str(e)}")
+        return {
+            'error': {
+                'code': -31008,
+                'message': str(e)
+            }
+        }
+    
+
+def handle_get_statement(params):
+    try:
+        from_date = params.get('from')
+        to_date = params.get('to')
+        
+        if not from_date or not to_date:
+            return {
+                'error': {
+                    'code': -32504,
+                    'message': 'From or to date not provided'
+                }
+            }
+        
+        transactions = get_transactions_in_range(from_date, to_date)
+        
+        statements = []
+        for transaction in transactions:
+            statement = {
+                'id': transaction[1],  # paycom_transaction_id
+                'time': transaction[6],  # create_time
+                'amount': transaction[4],
+                'account': {
+                    'user_id': transaction[3]
+                },
+                'create_time': transaction[6],
+                'perform_time': transaction[7] or 0,
+                'cancel_time': transaction[8] or 0,
+                'transaction': str(transaction[0]),
+                'state': transaction[2],
+                'reason': transaction[9] if transaction[9] is not None else None,
+                'receivers': []
+            }
+            statements.append(statement)
+        
+        return {
+            'result': {
+                'transactions': statements
+            }
+        }
+    except Exception as e:
         return {
             'error': {
                 'code': -31008,

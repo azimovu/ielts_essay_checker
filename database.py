@@ -184,6 +184,21 @@ def add_purchased_uses(user_id, amount):
     conn.commit()
     conn.close()
 
+def get_transactions_in_range(from_date: int, to_date: int) -> list:
+    """Get all transactions within the specified date range"""
+    conn = create_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM transactions 
+            WHERE create_time >= ? AND create_time <= ? 
+            ORDER BY create_time ASC
+        ''', (from_date, to_date))
+        return cursor.fetchall()
+    finally:
+        conn.close()
+
+
 '''
 Transaction-related functions
 def create_transaction(user_id: int, paycom_transaction_id: str, amount: int, uses: int, create_time: int) -> int:

@@ -6,7 +6,8 @@ from paycom_handlers import (
     handle_create_transaction,
     handle_perform_transaction,
     handle_cancel_transaction,
-    handle_check_transaction_status
+    handle_check_transaction_status,
+    handle_get_statement
 )
 import time
 import requests
@@ -155,7 +156,8 @@ def paycom_webhook():
             'CreateTransaction': handle_create_transaction,
             'PerformTransaction': handle_perform_transaction,
             'CancelTransaction': handle_cancel_transaction,
-            'CheckTransaction': handle_check_transaction_status
+            'CheckTransaction': handle_check_transaction_status,
+            'GetStatement': handle_get_statement
         }
         
         handler = handlers.get(method)
