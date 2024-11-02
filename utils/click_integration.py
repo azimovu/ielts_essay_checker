@@ -122,30 +122,38 @@ class ClickIntegration:
             response.raise_for_status()
             data = response.json()
 
+            logger.info(f"Click invoice status response: {data}")  # Add logging
+
             if data.get("error_code") != 0:
-                raise ClickException(
-                    data["error_code"], 
-                    data.get("error_note", "Unknown error")
-                )
+                return {
+                    "error_code": data.get("error_code", -1),
+                    "error_note": data.get("error_note", "Unknown error"),
+                    "invoice_status": None,
+                    "payment_id": None
+                }
 
-            # Update transaction status based on invoice status
-            status = data.get("invoice_status", -99)
-            if status == 2:  # Paid
-                update_transaction_status(
-                invoice_id,
-                TransactionState.PAID,
-                perform_time=int(time.time() * 1000),
-                is_click=True
-            )
-            elif status < 0:  # Cancelled/Failed
-                update_transaction_status(
-                    invoice_id,
-                    TransactionState.CANCELLED,
-                    cancel_time=int(time.time() * 1000)
-                )
+            # Ensure we have an invoice status
+            invoice_status = data.get("invoice_status")
+            if invoice_status is None:
+                return {
+                    "error_code": -1,
+                    "error_note": "Invoice status not found in response",
+                    "invoice_status": None,
+                    "payment_id": None
+                }
 
-            return data
+            return {
+                "error_code": 0,
+                "error_note": "",
+                "invoice_status": invoice_status,
+                "payment_id": data.get("payment_id")
+            }
 
         except requests.exceptions.RequestException as e:
             logger.error(f"Error checking Click invoice: {str(e)}")
-            raise ClickException(-1, "Failed to check invoice")
+            return {
+                "error_code": -1,
+                "error_note": f"Failed to check invoice: {str(e)}",
+                "invoice_status": None,
+                "payment_id": None
+            }
