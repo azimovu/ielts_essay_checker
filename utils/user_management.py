@@ -9,7 +9,7 @@ import asyncio
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import Dict, Any, Optional
-import datetime
+from datetime import datetime
 
 click = ClickIntegration()
 

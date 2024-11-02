@@ -30,13 +30,16 @@ def migrate_database():
             if 'usage_count' not in columns:
                 cursor.execute("ALTER TABLE users ADD COLUMN usage_count INTEGER DEFAULT 0 NOT NULL")
             
-            # Drop existing transactions table if it exists and create new one with proper defaults
+            # Drop existing transactions table and create new one with all necessary columns
             cursor.execute("DROP TABLE IF EXISTS transactions")
             cursor.execute('''
                 CREATE TABLE transactions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    paycom_transaction_id TEXT UNIQUE NOT NULL,
-                    paycom_state INTEGER NOT NULL,
+                    click_invoice_id TEXT,
+                    merchant_trans_id TEXT,
+                    paycom_transaction_id TEXT,
+                    payment_state INTEGER,
+                    paycom_state INTEGER,
                     user_id INTEGER NOT NULL,
                     amount INTEGER NOT NULL,
                     uses INTEGER NOT NULL,
@@ -44,23 +47,12 @@ def migrate_database():
                     perform_time INTEGER DEFAULT 0 NOT NULL,
                     cancel_time INTEGER DEFAULT 0 NOT NULL,
                     reason INTEGER DEFAULT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users (id)
+                    FOREIGN KEY (user_id) REFERENCES users (id),
+                    UNIQUE(click_invoice_id),
+                    UNIQUE(merchant_trans_id),
+                    UNIQUE(paycom_transaction_id)
                 )
             ''')
-            cursor.execute('''CREATE TABLE IF NOT EXISTS transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            click_invoice_id TEXT UNIQUE NOT NULL,
-            merchant_trans_id TEXT UNIQUE NOT NULL,
-            payment_state INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            amount INTEGER NOT NULL,
-            uses INTEGER NOT NULL,
-            create_time INTEGER NOT NULL,
-            perform_time INTEGER DEFAULT 0 NOT NULL,
-            cancel_time INTEGER DEFAULT 0 NOT NULL,
-            reason INTEGER DEFAULT NULL,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )''')
             
             conn.commit()
             print("Database migration completed successfully.")
@@ -375,3 +367,10 @@ if conn is not None:
     conn.close()
 else:
     print("Error! Cannot create the database connection.")
+
+
+if __name__ == "__main__":
+    migrate_database()
+else:
+    # Run migration when module is imported
+    migrate_database()
