@@ -122,7 +122,7 @@ class ClickIntegration:
             response.raise_for_status()
             data = response.json()
 
-            logger.info(f"Click invoice status response: {data}")  # Add logging
+            logger.info(f"Click invoice status response: {data}")
 
             if data.get("error_code") != 0:
                 return {
@@ -132,8 +132,8 @@ class ClickIntegration:
                     "payment_id": None
                 }
 
-            # Ensure we have an invoice status
-            invoice_status = data.get("invoice_status")
+            # Use 'status' instead of 'invoice_status'
+            invoice_status = data.get("status")
             if invoice_status is None:
                 return {
                     "error_code": -1,
@@ -144,9 +144,10 @@ class ClickIntegration:
 
             return {
                 "error_code": 0,
-                "error_note": "",
+                "error_note": data.get("error_note", ""),
                 "invoice_status": invoice_status,
-                "payment_id": data.get("payment_id")
+                "payment_id": data.get("payment_id"),
+                "status_note": data.get("status_note", "")
             }
 
         except requests.exceptions.RequestException as e:

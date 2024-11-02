@@ -357,7 +357,7 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
             # Check invoice status
             invoice_status = await check_invoice_status(pending_order['invoice_id'])
             
-            logger.info(f"Invoice status response: {invoice_status}")  # Add logging
+            logger.info(f"Invoice status response: {invoice_status}")
             
             if invoice_status['error_code'] == 0:
                 invoice_state = invoice_status.get('invoice_status')
@@ -366,7 +366,16 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
                     logger.error(f"Received null invoice status for invoice {pending_order['invoice_id']}")
                     continue
                 
-                logger.info(f"Invoice state: {invoice_state}")  # Add logging
+                logger.info(f"Invoice state: {invoice_state}")
+                
+                # Update status message to user
+                status_message = (
+                    f"🔄 Payment Status Update:\n"
+                    f"• Status: {invoice_status.get('status_note', 'Processing')}\n"
+                    f"• Invoice ID: {pending_order['invoice_id']}\n"
+                    f"• Amount: {pending_order['price_uzs']:,} UZS"
+                )
+                await send_message(update, status_message)
                 
                 if invoice_state == 2:  # Paid
                     payment_id = invoice_status.get('payment_id')
@@ -374,12 +383,12 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
                         logger.error("Payment ID is missing for paid invoice")
                         continue
                     
-                    logger.info(f"Checking payment status for payment_id: {payment_id}")  # Add logging
+                    logger.info(f"Checking payment status for payment_id: {payment_id}")
                     
                     # Verify payment status
                     payment_status = await check_payment_status(payment_id)
                     
-                    logger.info(f"Payment status response: {payment_status}")  # Add logging
+                    logger.info(f"Payment status response: {payment_status}")
                     
                     if payment_status['error_code'] == 0:
                         payment_state = payment_status.get('payment_status')
