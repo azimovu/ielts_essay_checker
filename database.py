@@ -47,6 +47,20 @@ def migrate_database():
                     FOREIGN KEY (user_id) REFERENCES users (id)
                 )
             ''')
+            cursor.execute('''CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            click_invoice_id TEXT UNIQUE NOT NULL,
+            merchant_trans_id TEXT UNIQUE NOT NULL,
+            payment_state INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            amount INTEGER NOT NULL,
+            uses INTEGER NOT NULL,
+            create_time INTEGER NOT NULL,
+            perform_time INTEGER DEFAULT 0 NOT NULL,
+            cancel_time INTEGER DEFAULT 0 NOT NULL,
+            reason INTEGER DEFAULT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )''')
             
             conn.commit()
             print("Database migration completed successfully.")
@@ -183,6 +197,20 @@ def add_purchased_uses(user_id, amount):
     cur.execute(sql, (amount, user_id))
     conn.commit()
     conn.close()
+
+def get_transaction_by_click_id(click_trans_id: str) -> dict:
+    """Get transaction by Click transaction ID"""
+    conn = create_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM transactions 
+            WHERE click_transaction_id = ?
+        ''', (click_trans_id,))
+        return cursor.fetchone()
+    finally:
+        conn.close()
+
 
 def get_transactions_in_range(from_date: int, to_date: int) -> list:
     """Get all transactions within the specified date range"""

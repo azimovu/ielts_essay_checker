@@ -1,52 +1,143 @@
-import aiohttp
+# utils/click_integration.py
 import hashlib
 import time
-from uuid import uuid4
+import requests
+from typing import Dict, Any, Tuple
 import logging
-from config import CLICK_MERCHANT_ID, CLICK_SERVICE_ID, CLICK_SECRET_KEY
+from config import (
+    CLICK_MERCHANT_ID, 
+    CLICK_SERVICE_ID,
+    CLICK_MERCHANT_USER_ID,
+    CLICK_SECRET_KEY
+)
+from database import (
+    TransactionState, 
+    create_transaction, 
+    get_transaction_by_click_id,
+    update_transaction_status
+)
 
-CLICK_API_URL = 'https://api.click.uz/v2/merchant/'
-
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def generate_auth_header():
-    timestamp = str(int(time.time()))
-    digest = hashlib.sha1((timestamp + CLICK_SECRET_KEY).encode()).hexdigest()
-    auth_header = f'{CLICK_MERCHANT_ID}:{digest}:{timestamp}'
-    return {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'Auth': auth_header
-    }
+class ClickException(Exception):
+    def __init__(self, error_code: int, error_message: str):
+        self.error_code = error_code
+        self.error_message = error_message
+        super().__init__(self.error_message)
 
-async def create_invoice(amount, phone_number):
-    merchant_trans_id = str(uuid4())
-    auth_header = await generate_auth_header()
-    data = {
-        "service_id": CLICK_SERVICE_ID,
-        "amount": amount,
-        "phone_number": phone_number,
-        "merchant_trans_id": merchant_trans_id,
-        "return_url": "http://www.uzielts.uz/click/complete"
-    }
+class ClickIntegration:
+    def __init__(self, is_test: bool = True):
+        self.merchant_id = CLICK_MERCHANT_ID
+        self.service_id = CLICK_SERVICE_ID
+        self.merchant_user_id = CLICK_MERCHANT_USER_ID
+        self.secret_key = CLICK_SECRET_KEY
+        self.base_url = "https://api.click.uz/v2/merchant/"
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(f"{CLICK_API_URL}invoice/create", headers=auth_header, json=data) as response:
-            return await response.json(), merchant_trans_id
+    def _generate_auth_header(self) -> Dict[str, str]:
+        timestamp = str(int(time.time()))
+        digest = hashlib.sha1(
+            (timestamp + self.secret_key).encode('utf-8')
+        ).hexdigest()
+        
+        auth_header = f"{self.merchant_user_id}:{digest}:{timestamp}"
+        
+        return {
+            "Auth": auth_header,
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
 
-async def check_invoice_status(invoice_id):
-    auth_header = await generate_auth_header()
-    url = f"{CLICK_API_URL}invoice/status/{CLICK_SERVICE_ID}/{invoice_id}"
+    def calculate_uses(self, amount_uzs: float) -> int:
+        """Calculate number of uses based on payment amount"""
+        if amount_uzs == 5000:
+            return 5
+        elif amount_uzs == 10000:
+            return 10
+        elif amount_uzs == 16000:
+            return 20
+        else:
+            return int(amount_uzs / 1000)
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=auth_header) as response:
-            return await response.json()
+    async def create_invoice(self, amount: float, user_id: int, phone_number: str) -> Tuple[str, Dict]:
+        """Create a Click invoice for payment"""
+        headers = self._generate_auth_header()
+        
+        merchant_trans_id = f"order_{user_id}_{int(time.time())}"
+        
+        payload = {
+            "service_id": self.service_id,
+            "amount": amount,
+            "phone_number": phone_number,
+            "merchant_trans_id": merchant_trans_id
+        }
 
-async def check_payment_status(payment_id):
-    auth_header = await generate_auth_header()
-    url = f"{CLICK_API_URL}payment/status/{CLICK_SERVICE_ID}/{payment_id}"
+        try:
+            response = requests.post(
+                f"{self.base_url}invoice/create",
+                json=payload,
+                headers=headers
+            )
+            response.raise_for_status()
+            data = response.json()
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=auth_header) as response:
-            return await response.json()
+            if data.get("error_code") != 0:
+                raise ClickException(
+                    data["error_code"], 
+                    data.get("error_note", "Unknown error")
+                )
+
+            # Create transaction record
+            uses = self.calculate_uses(amount)
+            create_transaction(
+                user_id=user_id,
+                click_invoice_id=data["invoice_id"],
+                amount=int(amount * 100),  # Convert to tiyin
+                uses=uses,
+                create_time=int(time.time() * 1000),
+                merchant_trans_id=merchant_trans_id
+            )
+
+            return str(data["invoice_id"]), data
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error creating Click invoice: {str(e)}")
+            raise ClickException(-1, "Failed to create invoice")
+
+    async def check_invoice(self, invoice_id: str) -> Dict[str, Any]:
+        """Check Click invoice status"""
+        headers = self._generate_auth_header()
+
+        try:
+            response = requests.get(
+                f"{self.base_url}invoice/status/{self.service_id}/{invoice_id}",
+                headers=headers
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get("error_code") != 0:
+                raise ClickException(
+                    data["error_code"], 
+                    data.get("error_note", "Unknown error")
+                )
+
+            # Update transaction status based on invoice status
+            status = data.get("invoice_status", -99)
+            if status == 2:  # Paid
+                update_transaction_status(
+                    invoice_id,
+                    TransactionState.PAID,
+                    perform_time=int(time.time() * 1000)
+                )
+            elif status < 0:  # Cancelled/Failed
+                update_transaction_status(
+                    invoice_id,
+                    TransactionState.CANCELLED,
+                    cancel_time=int(time.time() * 1000)
+                )
+
+            return data
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error checking Click invoice: {str(e)}")
+            raise ClickException(-1, "Failed to check invoice")
