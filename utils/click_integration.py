@@ -89,13 +89,14 @@ class ClickIntegration:
             # Create transaction record
             uses = self.calculate_uses(amount)
             create_transaction(
-                user_id=user_id,
-                click_invoice_id=data["invoice_id"],
-                amount=int(amount * 100),  # Convert to tiyin
-                uses=uses,
-                create_time=int(time.time() * 1000),
-                merchant_trans_id=merchant_trans_id
-            )
+            user_id=user_id,
+            amount=int(amount * 100),  # Convert to tiyin
+            uses=uses,
+            create_time=int(time.time() * 1000),
+            click_invoice_id=data["invoice_id"],
+            merchant_trans_id=merchant_trans_id
+        )
+
 
             return str(data["invoice_id"]), data
 
@@ -125,10 +126,11 @@ class ClickIntegration:
             status = data.get("invoice_status", -99)
             if status == 2:  # Paid
                 update_transaction_status(
-                    invoice_id,
-                    TransactionState.PAID,
-                    perform_time=int(time.time() * 1000)
-                )
+                invoice_id,
+                TransactionState.PAID,
+                perform_time=int(time.time() * 1000),
+                is_click=True
+            )
             elif status < 0:  # Cancelled/Failed
                 update_transaction_status(
                     invoice_id,

@@ -71,19 +71,32 @@ def migrate_database():
     else:
         print("Error! Cannot create the database connection.")
 
-def create_transaction(user_id: int, paycom_transaction_id: str, amount: int, uses: int, create_time: int) -> int:
+def create_transaction(user_id: int, amount: int, uses: int, create_time: int, 
+                      click_invoice_id: str = None, merchant_trans_id: str = None,
+                      paycom_transaction_id: str = None) -> int:
     """Create a new transaction record with initial state"""
     conn = create_connection()
     try:
         cursor = conn.cursor()
         
-        cursor.execute('''
-            INSERT INTO transactions (
-                paycom_transaction_id, user_id, amount, uses, 
-                paycom_state, create_time, perform_time, cancel_time
-            ) VALUES (?, ?, ?, ?, ?, ?, 0, 0)
-        ''', (paycom_transaction_id, user_id, amount, uses, 
-              TransactionState.CREATED.value, create_time))
+        if click_invoice_id:
+            # Click payment transaction
+            cursor.execute('''
+                INSERT INTO transactions (
+                    click_invoice_id, merchant_trans_id, user_id, amount, uses, 
+                    payment_state, create_time, perform_time, cancel_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)
+            ''', (click_invoice_id, merchant_trans_id, user_id, amount, uses, 
+                  TransactionState.CREATED.value, create_time))
+        elif paycom_transaction_id:
+            # Paycom payment transaction
+            cursor.execute('''
+                INSERT INTO transactions (
+                    paycom_transaction_id, user_id, amount, uses, 
+                    paycom_state, create_time, perform_time, cancel_time
+                ) VALUES (?, ?, ?, ?, ?, ?, 0, 0)
+            ''', (paycom_transaction_id, user_id, amount, uses, 
+                  TransactionState.CREATED.value, create_time))
         
         transaction_id = cursor.lastrowid
         conn.commit()
@@ -267,22 +280,22 @@ def get_transaction_by_paycom_id(paycom_transaction_id: str) -> tuple:
     finally:
         conn.close()
 
-def update_transaction_status(paycom_transaction_id: str, state: TransactionState, 
+def update_transaction_status(transaction_id: str, state: TransactionState, 
                             perform_time: int = 0, cancel_time: int = 0, 
-                            reason: int = None) -> bool:
+                            reason: int = None, is_click: bool = False) -> bool:
     """Update transaction status and related fields"""
     conn = create_connection()
     try:
         cursor = conn.cursor()
         
-        update_fields = ["paycom_state = ?"]
+        update_fields = ["payment_state = ?"] if is_click else ["paycom_state = ?"]
         params = [state.value]
         
-        if perform_time is not None:
+        if perform_time:
             update_fields.append("perform_time = ?")
             params.append(perform_time)
         
-        if cancel_time is not None:
+        if cancel_time:
             update_fields.append("cancel_time = ?")
             params.append(cancel_time)
         
@@ -290,23 +303,24 @@ def update_transaction_status(paycom_transaction_id: str, state: TransactionStat
             update_fields.append("reason = ?")
             params.append(reason)
             
-        params.append(paycom_transaction_id)
+        params.append(transaction_id)
         
+        id_field = "click_invoice_id" if is_click else "paycom_transaction_id"
         sql = f'''
             UPDATE transactions 
             SET {", ".join(update_fields)}
-            WHERE paycom_transaction_id = ?
+            WHERE {id_field} = ?
         '''
         
         cursor.execute(sql, params)
         
         if state == TransactionState.PAID:
             # Get transaction details
-            cursor.execute('''
+            cursor.execute(f'''
                 SELECT user_id, uses 
                 FROM transactions 
-                WHERE paycom_transaction_id = ?
-            ''', (paycom_transaction_id,))
+                WHERE {id_field} = ?
+            ''', (transaction_id,))
             transaction = cursor.fetchone()
             
             if transaction:

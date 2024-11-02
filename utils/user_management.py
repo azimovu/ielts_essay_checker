@@ -9,6 +9,7 @@ import asyncio
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import Dict, Any, Optional
+import datetime
 
 click = ClickIntegration()
 
@@ -180,7 +181,7 @@ async def handle_payment_error(update: Update, error: Exception) -> None:
 
 
 async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, amount: int = None) -> None:
-    """Handle the purchase process using Click."""
+    """Handle the purchase process using Click with improved error handling."""
     user_id = update.effective_user.id
     user = get_user(user_id)
     
@@ -200,43 +201,80 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
     price_uzs = calculate_price(amount)
     
     try:
-        # Create Click invoice
+        # Log the initiation of payment process
+        logger.info(f"Creating Click invoice for user {user_id}, amount: {price_uzs} UZS")
+        
+        # Create Click invoice with error handling
         invoice_id, invoice_data = await click.create_invoice(
             amount=price_uzs,
             user_id=user_id,
             phone_number=user.phone_number
         )
         
+        # Log the response from Click
+        logger.info(f"Click invoice response: {invoice_data}")
+        
+        if not invoice_data:
+            raise Exception("No response received from Click API")
+            
         if invoice_data.get('error_code') == 0:
+            # Store more detailed payment information
             context.user_data['pending_order'] = {
                 'invoice_id': invoice_id,
                 'amount': amount,
-                'merchant_trans_id': invoice_data.get('merchant_trans_id')
+                'merchant_trans_id': invoice_data.get('merchant_trans_id'),
+                'service_id': invoice_data.get('service_id'),
+                'merchant_id': invoice_data.get('merchant_id'),
+                'created_time': datetime.now().isoformat(),
+                'price_uzs': price_uzs
             }
             
-            # Create payment buttons
+            # Create payment buttons with better UX
             keyboard = [
-                [InlineKeyboardButton("Pay with Click", url=f"https://my.click.uz/services/pay?service_id={invoice_data['service_id']}&merchant_id={invoice_data['merchant_id']}&amount={price_uzs}&transaction_param={invoice_data['merchant_trans_id']}")],
-                [InlineKeyboardButton("Check Payment Status", callback_data=f"check_payment_{invoice_id}")]
+                [InlineKeyboardButton(
+                    "Pay with Click", 
+                    url=f"https://my.click.uz/services/pay?service_id={invoice_data['service_id']}&merchant_id={invoice_data['merchant_id']}&amount={price_uzs}&transaction_param={invoice_data['merchant_trans_id']}")
+                ],
+                [InlineKeyboardButton("Check Payment Status", callback_data=f"check_payment_{invoice_id}")],
+                [InlineKeyboardButton("Cancel Payment", callback_data=f"cancel_payment_{invoice_id}")]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
             await send_message(
                 update,
-                f"Great! You're purchasing {amount} uses for {price_uzs:,} UZS.\n"
-                f"Click the button below to proceed with the payment.\n"
-                f"After payment, click 'Check Payment Status' to verify your purchase.",
+                f"🛒 Purchase Details:\n"
+                f"• Quantity: {amount} uses\n"
+                f"• Price: {price_uzs:,} UZS\n\n"
+                f"1️⃣ Click the 'Pay with Click' button to proceed\n"
+                f"2️⃣ Complete the payment in Click\n"
+                f"3️⃣ Return here and click 'Check Payment Status'\n\n"
+                f"ℹ️ Payment will be checked automatically every 30 seconds.",
                 reply_markup=reply_markup
             )
             
-            # Start periodic payment check
+            # Start periodic payment check with improved error handling
             asyncio.create_task(periodic_payment_check(update, context))
+            
         else:
-            await send_message(update, f"Sorry, there was an error creating the invoice: {invoice_data.get('error_note', 'Unknown error')}")
+            error_note = invoice_data.get('error_note', 'Unknown error')
+            logger.error(f"Click API error: {error_note}")
+            await send_message(
+                update,
+                f"⚠️ Error creating payment: {error_note}\n"
+                "Please try again or contact support if the issue persists."
+            )
     
     except Exception as e:
-        logger.error(f"Error in handle_purchase: {str(e)}")
-        await send_message(update, "Sorry, there was an error processing your request. Please try again later.")
+        logger.error(f"Error in handle_purchase: {str(e)}", exc_info=True)
+        await send_message(
+            update,
+            "⚠️ Sorry, we encountered an error while processing your request.\n"
+            "This might be due to:\n"
+            "• Temporary Click service disruption\n"
+            "• Network connectivity issues\n"
+            "• Invalid payment parameters\n\n"
+            "Please try again in a few minutes or contact support if the issue persists."
+        )
 
 async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Periodically check payment status."""
