@@ -201,40 +201,45 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
     price_uzs = calculate_price(amount)
     
     try:
-        # Log the initiation of payment process
         logger.info(f"Creating Click invoice for user {user_id}, amount: {price_uzs} UZS")
         
-        # Create Click invoice with error handling
         invoice_id, invoice_data = await click.create_invoice(
             amount=price_uzs,
             user_id=user_id,
             phone_number=user.phone_number
         )
         
-        # Log the response from Click
         logger.info(f"Click invoice response: {invoice_data}")
         
         if not invoice_data:
             raise Exception("No response received from Click API")
             
         if invoice_data.get('error_code') == 0:
-            # Store more detailed payment information
+            # Verify that all required fields are present
+            required_fields = ['service_id', 'merchant_id', 'merchant_trans_id']
+            if not all(field in invoice_data for field in required_fields):
+                raise Exception(f"Missing required fields in Click response. Required: {required_fields}")
+            
             context.user_data['pending_order'] = {
                 'invoice_id': invoice_id,
                 'amount': amount,
-                'merchant_trans_id': invoice_data.get('merchant_trans_id'),
-                'service_id': invoice_data.get('service_id'),
-                'merchant_id': invoice_data.get('merchant_id'),
+                'merchant_trans_id': invoice_data['merchant_trans_id'],
+                'service_id': invoice_data['service_id'],
+                'merchant_id': invoice_data['merchant_id'],
                 'created_time': datetime.now().isoformat(),
                 'price_uzs': price_uzs
             }
             
-            # Create payment buttons with better UX
+            payment_url = (
+                f"https://my.click.uz/services/pay?"
+                f"service_id={invoice_data['service_id']}&"
+                f"merchant_id={invoice_data['merchant_id']}&"
+                f"amount={price_uzs}&"
+                f"transaction_param={invoice_data['merchant_trans_id']}"
+            )
+            
             keyboard = [
-                [InlineKeyboardButton(
-                    "Pay with Click", 
-                    url=f"https://my.click.uz/services/pay?service_id={invoice_data['service_id']}&merchant_id={invoice_data['merchant_id']}&amount={price_uzs}&transaction_param={invoice_data['merchant_trans_id']}")
-                ],
+                [InlineKeyboardButton("Pay with Click", url=payment_url)],
                 [InlineKeyboardButton("Check Payment Status", callback_data=f"check_payment_{invoice_id}")],
                 [InlineKeyboardButton("Cancel Payment", callback_data=f"cancel_payment_{invoice_id}")]
             ]
@@ -252,7 +257,6 @@ async def handle_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE, am
                 reply_markup=reply_markup
             )
             
-            # Start periodic payment check with improved error handling
             asyncio.create_task(periodic_payment_check(update, context))
             
         else:

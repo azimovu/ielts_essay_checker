@@ -86,17 +86,23 @@ class ClickIntegration:
                     data.get("error_note", "Unknown error")
                 )
 
+            # Add service_id and merchant_id from instance variables
+            data.update({
+                'service_id': self.service_id,
+                'merchant_id': self.merchant_id,
+                'merchant_trans_id': merchant_trans_id
+            })
+
             # Create transaction record
             uses = self.calculate_uses(amount)
             create_transaction(
-            user_id=user_id,
-            amount=int(amount * 100),  # Convert to tiyin
-            uses=uses,
-            create_time=int(time.time() * 1000),
-            click_invoice_id=data["invoice_id"],
-            merchant_trans_id=merchant_trans_id
-        )
-
+                user_id=user_id,
+                click_invoice_id=data["invoice_id"],
+                amount=int(amount),
+                uses=uses,
+                create_time=int(time.time() * 1000),
+                merchant_trans_id=merchant_trans_id
+            )
 
             return str(data["invoice_id"]), data
 
