@@ -5,6 +5,8 @@ from enum import Enum
 import logging
 import time
 
+logger = logging.getLogger(__name__)
+
 class TransactionState(Enum):
     PENDING = 0      # Waiting
     CREATED = 1      # Transaction saved
@@ -280,21 +282,29 @@ def get_transaction_by_paycom_id(paycom_transaction_id: str) -> tuple:
         conn.close()
 
 def update_transaction_status(transaction_id: str, state: TransactionState, 
-                            perform_time: int = 0, cancel_time: int = 0, 
+                            perform_time: int = None, cancel_time: int = None, 
                             reason: int = None, is_click: bool = False) -> bool:
     """Update transaction status and related fields"""
     conn = create_connection()
     try:
         cursor = conn.cursor()
         
-        update_fields = ["payment_state = ?"] if is_click else ["paycom_state = ?"]
-        params = [state.value]
+        update_fields = []
+        params = []
+
+        # Always update state
+        if is_click:
+            update_fields.append("payment_state = ?")
+        else:
+            update_fields.append("paycom_state = ?")
+        params.append(state.value)
         
-        if perform_time:
+        # Add optional fields if provided
+        if perform_time is not None:
             update_fields.append("perform_time = ?")
             params.append(perform_time)
         
-        if cancel_time:
+        if cancel_time is not None:
             update_fields.append("cancel_time = ?")
             params.append(cancel_time)
         
@@ -302,9 +312,11 @@ def update_transaction_status(transaction_id: str, state: TransactionState,
             update_fields.append("reason = ?")
             params.append(reason)
             
+        # Add transaction_id to params
         params.append(transaction_id)
         
-        id_field = "click_invoice_id" if is_click else "paycom_transaction_id"
+        # Build and execute query
+        id_field = "merchant_trans_id" if is_click else "paycom_transaction_id"
         sql = f'''
             UPDATE transactions 
             SET {", ".join(update_fields)}
@@ -312,29 +324,11 @@ def update_transaction_status(transaction_id: str, state: TransactionState,
         '''
         
         cursor.execute(sql, params)
-        
-        if state == TransactionState.PAID:
-            # Get transaction details
-            cursor.execute(f'''
-                SELECT user_id, uses 
-                FROM transactions 
-                WHERE {id_field} = ?
-            ''', (transaction_id,))
-            transaction = cursor.fetchone()
-            
-            if transaction:
-                user_id, uses = transaction
-                # Add purchased uses to user
-                cursor.execute('''
-                    UPDATE users 
-                    SET purchased_uses = purchased_uses + ? 
-                    WHERE id = ?
-                ''', (uses, user_id))
-        
         conn.commit()
-        return True
-    except Error as e:
-        print(f"Error updating transaction: {e}")
+        
+        return cursor.rowcount > 0
+    except Exception as e:
+        logger.error(f"Error updating transaction status: {str(e)}", exc_info=True)
         return False
     finally:
         conn.close()

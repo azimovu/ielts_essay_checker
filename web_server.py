@@ -82,45 +82,56 @@ def handle_exception(e):
 @app.route('/click/prepare', methods=['POST'])
 def click_prepare():
     try:
-        logger.info(f"Headers: {request.headers}")
-        logger.info(f"Body: {request.get_data(as_text=True)}")
-        logger.info(f"URL: {request.url}")
-        logger.info(f"Method: {request.method}")
-        
         data = request.form
         logger.info(f"Received Click prepare request: {data}")
 
-        # Validate required parameters
-        required_params = ['click_trans_id', 'service_id', 'merchant_trans_id', 'amount']
-        if not all(param in data for param in required_params):
-            return jsonify({
-                'error': -8,
-                'error_note': 'Missing required parameters'
-            })
-
-        # Verify signature
+        # 1. Verify signature
         sign_string = data.get('sign_string')
         sign_time = data.get('sign_time')
-        
-        # Get transaction
-        transaction = get_transaction_by_click_id(data['merchant_trans_id'])
+        click_trans_id = data.get('click_trans_id')
+        service_id = data.get('service_id')
+        merchant_trans_id = data.get('merchant_trans_id')
+        amount = data.get('amount')
+        action = data.get('action')
+
+        # Generate sign string
+        check_string = f"{click_trans_id}{service_id}{CLICK_SECRET_KEY}{merchant_trans_id}{amount}{action}{sign_time}"
+        my_sign = hashlib.md5(check_string.encode('utf-8')).hexdigest()
+
+        if my_sign != sign_string:
+            logger.error(f"Sign string mismatch. Expected: {my_sign}, Got: {sign_string}")
+            return jsonify({
+                'error': -1,
+                'error_note': 'SIGN CHECK FAILED!'
+            })
+
+        # 2. Get transaction from database
+        transaction = get_transaction_by_click_id(merchant_trans_id)
         
         if not transaction:
             return jsonify({
                 'error': -5,
-                'error_note': 'Transaction not found'
+                'error_note': 'Order not found'
             })
 
-        # Verify amount
-        if float(data['amount']) != float(transaction['amount']):
+        # 3. Verify amount
+        if float(amount) != float(transaction['amount']):
             return jsonify({
                 'error': -2,
                 'error_note': 'Incorrect amount'
             })
 
+        # 4. Update transaction state
+        update_transaction_status(
+            transaction_id=merchant_trans_id,
+            state=TransactionState.CREATED,
+            is_click=True
+        )
+
+        # 5. Return successful response
         return jsonify({
-            'click_trans_id': data['click_trans_id'],
-            'merchant_trans_id': data['merchant_trans_id'],
+            'click_trans_id': click_trans_id,
+            'merchant_trans_id': merchant_trans_id,
             'merchant_prepare_id': transaction['id'],
             'error': 0,
             'error_note': 'Success'
@@ -135,79 +146,88 @@ def click_prepare():
 
 @app.route('/click/complete', methods=['POST'])
 def click_complete():
-    logger.info(f'Received Click complete request: {request.form}')
-    
-    response = {
-        'click_trans_id': request.form.get('click_trans_id'),
-        'merchant_trans_id': request.form.get('merchant_trans_id'),
-        'merchant_confirm_id': None,
-        'error': -1,
-        'error_note': ''
-    }
-
     try:
-        # Verify signature
-        if not verify_click_signature(request.form, request.form.get('sign_string')):
-            response['error'] = -1
-            response['error_note'] = 'SIGN CHECK FAILED!'
-            return jsonify(response)
+        data = request.form
+        logger.info(f"Received Click complete request: {data}")
 
-        click_trans_id = request.form.get('click_trans_id')
-        merchant_trans_id = request.form.get('merchant_trans_id')
-        merchant_prepare_id = request.form.get('merchant_prepare_id')
-        amount = request.form.get('amount')
+        # 1. Verify signature
+        sign_string = data.get('sign_string')
+        sign_time = data.get('sign_time')
+        click_trans_id = data.get('click_trans_id')
+        service_id = data.get('service_id')
+        merchant_trans_id = data.get('merchant_trans_id')
+        merchant_prepare_id = data.get('merchant_prepare_id')
+        amount = data.get('amount')
+        action = data.get('action')
 
-        if not all([click_trans_id, merchant_trans_id, merchant_prepare_id, amount]):
-            response['error'] = -8
-            response['error_note'] = 'Error in request from click'
-            return jsonify(response)
+        # Generate sign string
+        check_string = f"{click_trans_id}{service_id}{CLICK_SECRET_KEY}{merchant_trans_id}{merchant_prepare_id}{amount}{action}{sign_time}"
+        my_sign = hashlib.md5(check_string.encode('utf-8')).hexdigest()
 
-        # Get transaction
-        transaction = get_transaction_by_click_id(click_trans_id)
+        if my_sign != sign_string:
+            logger.error(f"Sign string mismatch. Expected: {my_sign}, Got: {sign_string}")
+            return jsonify({
+                'error': -1,
+                'error_note': 'SIGN CHECK FAILED!'
+            })
+
+        # 2. Get transaction
+        transaction = get_transaction_by_click_id(merchant_trans_id)
+        
         if not transaction:
-            response['error'] = -6
-            response['error_note'] = 'Transaction does not exist'
-            return jsonify(response)
+            return jsonify({
+                'error': -5,
+                'error_note': 'Order not found'
+            })
 
-        # Check transaction state
+        # 3. Check if payment was already completed
         if transaction['payment_state'] == TransactionState.PAID.value:
-            response['error'] = -4
-            response['error_note'] = 'Already paid'
-            return jsonify(response)
-        elif transaction['payment_state'] == TransactionState.CANCELLED.value:
-            response['error'] = -9
-            response['error_note'] = 'Transaction cancelled'
-            return jsonify(response)
+            return jsonify({
+                'error': -4,
+                'error_note': 'Already paid'
+            })
 
-        # Process payment
-        try:
-            user_id = int(merchant_trans_id.split('_')[1])
-            click = ClickIntegration()
-            uses = click.calculate_uses(float(amount))
-            add_purchased_uses(user_id, uses)
-            
-            merchant_confirm_id = update_transaction_status(
-                click_trans_id,
-                TransactionState.PAID,
-                perform_time=int(time.time() * 1000)
+        # 4. Process the payment
+        error = int(data.get('error', '-1'))
+        if error == 0:
+            # Successful payment
+            update_transaction_status(
+                transaction_id=merchant_trans_id,
+                state=TransactionState.PAID,
+                perform_time=int(time.time() * 1000),
+                is_click=True
             )
 
-            response['error'] = 0
-            response['error_note'] = 'Success'
-            response['merchant_confirm_id'] = merchant_confirm_id
-            return jsonify(response)
+            # Add purchased uses to user
+            add_purchased_uses(
+                transaction['user_id'],
+                transaction['uses']
+            )
+        else:
+            # Failed payment
+            update_transaction_status(
+                transaction_id=merchant_trans_id,
+                state=TransactionState.CANCELLED,
+                cancel_time=int(time.time() * 1000),
+                reason=error,
+                is_click=True
+            )
 
-        except Exception as e:
-            logger.error(f'Error processing payment: {e}')
-            response['error'] = -7
-            response['error_note'] = 'Failed to update user'
-            return jsonify(response)
+        # 5. Return response
+        return jsonify({
+            'click_trans_id': click_trans_id,
+            'merchant_trans_id': merchant_trans_id,
+            'merchant_confirm_id': transaction['id'],
+            'error': 0,
+            'error_note': 'Success'
+        })
 
     except Exception as e:
-        logger.error(f'Error in Click complete: {str(e)}')
-        response['error'] = -8
-        response['error_note'] = 'Error in request from click'
-        return jsonify(response)
+        logger.error(f"Error in Click complete: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': -1,
+            'error_note': f'Internal error: {str(e)}'
+        })
 
 if __name__ == "__main__":
     serve(app, host="0.0.0.0", port=5000)
