@@ -429,69 +429,68 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # Update verify_payment to use the new functions
-async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Manually verify payment status."""
-    if 'pending_order' not in context.user_data:
-        await send_message(update, "❌ No pending order found. Please start a new purchase.")
-        return
-    
-    pending_order = context.user_data['pending_order']
+async def verify_payment(self, invoice_id: str, merchant_trans_id: str) -> Dict[str, Any]:
+    """Verify payment status with both invoice and merchant transaction ID"""
     try:
-        invoice_status = await check_invoice_status(pending_order['invoice_id'])
+        # First check invoice status
+        invoice_status = await self.check_invoice(invoice_id)
         
-        if invoice_status['error_code'] == 0:
-            invoice_state = invoice_status.get('invoice_status')
-            
-            # Add null check for invoice_state
-            if invoice_state is None:
-                await send_message(update, "❌ Unable to verify payment status. Please try again later.")
-                return
-                
-            if invoice_state == 2:  # Paid
-                payment_id = invoice_status.get('payment_id')
-                if not payment_id:
-                    await send_message(update, "❌ Payment verification failed. Please try again later.")
-                    return
-                    
-                payment_status = await check_payment_status(payment_id)
-                
-                if payment_status['error_code'] == 0:
-                    payment_state = payment_status.get('payment_status')
-                    
-                    if payment_state == 2:  # Confirmed payment
-                        user_id = update.effective_user.id
-                        database.add_purchased_uses(user_id, pending_order['amount'])
-                        await send_message(
-                            update,
-                            f"✅ Payment verified! Added {pending_order['amount']} uses to your account."
-                        )
-                        del context.user_data['pending_order']
-                    else:
-                        await send_message(update, "⏳ Payment is still being processed. Please try again later.")
-                else:
-                    await send_message(update, f"❌ Payment verification failed: {payment_status['error_note']}")
-            elif invoice_state < 0:
-                await send_message(update, "❌ Payment was cancelled or failed. Please try again.")
-                del context.user_data['pending_order']
-            else:
-                await send_message(update, "⏳ Payment is still pending. Please try again later.")
-        else:
-            await send_message(
-                update,
-                f"❌ Error checking payment status: {invoice_status['error_note']}"
+        if invoice_status.get('error_code') != 0:
+            return {
+                'success': False,
+                'error_code': invoice_status.get('error_code'),
+                'error_note': invoice_status.get('error_note')
+            }
+
+        # If invoice is paid, verify with merchant transaction ID
+        if invoice_status.get('invoice_status') == 2:  # Paid status
+            payment_status = await self.check_payment_status_by_merchant_trans_id(
+                self.service_id,
+                merchant_trans_id
             )
-    
+            
+            if payment_status.get('payment_status') == 2:  # Confirmed status
+                return {
+                    'success': True,
+                    'error_code': 0,
+                    'error_note': 'Payment confirmed',
+                    'payment_id': payment_status.get('payment_id')
+                }
+
+        return {
+            'success': False,
+            'error_code': -1,
+            'error_note': 'Payment not confirmed',
+            'invoice_status': invoice_status.get('invoice_status')
+        }
+
     except Exception as e:
-        logger.error(f"Error in verify_payment: {str(e)}")
-        await handle_payment_error(update, e)
+        logger.error(f"Error verifying payment: {str(e)}")
+        return {
+            'success': False,
+            'error_code': -1,
+            'error_note': f"Verification error: {str(e)}"
+        }
 
 async def send_message(update: Update, text: str, reply_markup=None):
     """Send a message in both callback query and normal message contexts."""
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup)
-
+    try:
+        if update.callback_query:
+            # Only edit if content is different
+            current_text = update.callback_query.message.text
+            current_markup = update.callback_query.message.reply_markup
+            
+            if current_text != text or current_markup != reply_markup:
+                await update.callback_query.edit_message_text(
+                    text, 
+                    reply_markup=reply_markup
+                )
+            else:
+                await update.callback_query.answer()
+        else:
+            await update.message.reply_text(text, reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Error sending message: {str(e)}")
 
 
 async def handle_check_remaining_uses(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

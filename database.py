@@ -210,9 +210,16 @@ def get_transaction_by_click_id(click_trans_id: str) -> dict:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT * FROM transactions 
-            WHERE click_transaction_id = ?
+            WHERE merchant_trans_id = ?
         ''', (click_trans_id,))
-        return cursor.fetchone()
+        result = cursor.fetchone()
+        if result:
+            # Convert tuple to dictionary
+            columns = ['id', 'click_invoice_id', 'merchant_trans_id', 'paycom_transaction_id', 
+                      'payment_state', 'paycom_state', 'user_id', 'amount', 'uses', 
+                      'create_time', 'perform_time', 'cancel_time', 'reason']
+            return dict(zip(columns, result))
+        return None
     finally:
         conn.close()
 

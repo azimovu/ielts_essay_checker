@@ -81,84 +81,57 @@ def handle_exception(e):
 
 @app.route('/click/prepare', methods=['POST'])
 def click_prepare():
-    logger.info(f'Received Click prepare request: {request.form}')
-    
-    response = {
-        'click_trans_id': request.form.get('click_trans_id'),
-        'merchant_trans_id': request.form.get('merchant_trans_id'),
-        'merchant_prepare_id': None,
-        'error': -1,
-        'error_note': ''
-    }
-
     try:
-        # Verify signature
-        if not verify_click_signature(request.form, request.form.get('sign_string')):
-            response['error'] = -1
-            response['error_note'] = 'SIGN CHECK FAILED!'
-            return jsonify(response)
-
-        # Verify required parameters
-        merchant_trans_id = request.form.get('merchant_trans_id')
-        amount = request.form.get('amount')
+        logger.info(f"Headers: {request.headers}")
+        logger.info(f"Body: {request.get_data(as_text=True)}")
+        logger.info(f"URL: {request.url}")
+        logger.info(f"Method: {request.method}")
         
-        if not all([merchant_trans_id, amount]):
-            response['error'] = -8
-            response['error_note'] = 'Error in request from click'
-            return jsonify(response)
+        data = request.form
+        logger.info(f"Received Click prepare request: {data}")
 
-        try:
-            amount = float(amount)
-        except ValueError:
-            response['error'] = -2
-            response['error_note'] = 'Incorrect parameter amount'
-            return jsonify(response)
+        # Validate required parameters
+        required_params = ['click_trans_id', 'service_id', 'merchant_trans_id', 'amount']
+        if not all(param in data for param in required_params):
+            return jsonify({
+                'error': -8,
+                'error_note': 'Missing required parameters'
+            })
 
-        # Extract user_id from merchant_trans_id
-        try:
-            user_id = int(merchant_trans_id.split('_')[1])
-        except (IndexError, ValueError):
-            response['error'] = -5
-            response['error_note'] = 'User does not exist'
-            return jsonify(response)
+        # Verify signature
+        sign_string = data.get('sign_string')
+        sign_time = data.get('sign_time')
+        
+        # Get transaction
+        transaction = get_transaction_by_click_id(data['merchant_trans_id'])
+        
+        if not transaction:
+            return jsonify({
+                'error': -5,
+                'error_note': 'Transaction not found'
+            })
 
-        # Verify user exists
-        user = get_user(user_id)
-        if not user:
-            response['error'] = -5
-            response['error_note'] = 'User does not exist'
-            return jsonify(response)
+        # Verify amount
+        if float(data['amount']) != float(transaction['amount']):
+            return jsonify({
+                'error': -2,
+                'error_note': 'Incorrect amount'
+            })
 
-        # Check if transaction already exists
-        existing_transaction = get_transaction_by_click_id(request.form.get('click_trans_id'))
-        if existing_transaction:
-            if existing_transaction['payment_state'] == TransactionState.PAID.value:
-                response['error'] = -4
-                response['error_note'] = 'Already paid'
-                return jsonify(response)
-            elif existing_transaction['payment_state'] == TransactionState.CANCELLED.value:
-                response['error'] = -9
-                response['error_note'] = 'Transaction cancelled'
-                return jsonify(response)
-
-        # Create new transaction
-        merchant_prepare_id = create_transaction(
-            click_trans_id=request.form.get('click_trans_id'),
-            merchant_trans_id=merchant_trans_id,
-            amount=amount,
-            state=TransactionState.WAITING
-        )
-
-        response['error'] = 0
-        response['error_note'] = 'Success'
-        response['merchant_prepare_id'] = merchant_prepare_id
-        return jsonify(response)
+        return jsonify({
+            'click_trans_id': data['click_trans_id'],
+            'merchant_trans_id': data['merchant_trans_id'],
+            'merchant_prepare_id': transaction['id'],
+            'error': 0,
+            'error_note': 'Success'
+        })
 
     except Exception as e:
-        logger.error(f'Error in Click prepare: {str(e)}')
-        response['error'] = -8
-        response['error_note'] = 'Error in request from click'
-        return jsonify(response)
+        logger.error(f"Error in Click prepare: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': -1,
+            'error_note': f'Internal error: {str(e)}'
+        })
 
 @app.route('/click/complete', methods=['POST'])
 def click_complete():
