@@ -63,6 +63,22 @@ def verify_click_signature(data: dict, signature: str) -> bool:
         logger.error(f"Error during signature verification: {e}")
         return False
 
+@app.before_request
+def log_request_info():
+    logger.info('Headers: %s', dict(request.headers))
+    logger.info('Body: %s', request.get_data().decode('utf-8'))
+    logger.info('URL: %s', request.url)
+    logger.info('Method: %s', request.method)
+
+# Also add logging to catch any errors
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+    return jsonify({
+        'error': -1,
+        'error_note': 'Internal server error'
+    }), 500
+
 @app.route('/click/prepare', methods=['POST'])
 def click_prepare():
     logger.info(f'Received Click prepare request: {request.form}')

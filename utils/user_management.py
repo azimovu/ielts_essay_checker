@@ -406,7 +406,7 @@ async def periodic_payment_check(update: Update, context: ContextTypes.DEFAULT_T
                             logger.info(f"Payment not yet confirmed. Status: {payment_state}")
                             
                 elif invoice_state < 0:  # Failed/Cancelled
-                    await send_message(update, "❌ Payment was cancelled or failed. Please try again.")
+                    await send_message(update, "❌ Payment was cancelled or failed. Please try again. {error_note}")
                     del context.user_data['pending_order']
                     return
                 else:
