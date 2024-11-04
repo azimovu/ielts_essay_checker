@@ -110,6 +110,96 @@ class ClickIntegration:
             logger.error(f"Error creating Click invoice: {str(e)}")
             raise ClickException(-1, "Failed to create invoice")
 
+    async def verify_payment(self, invoice_id: str, merchant_trans_id: str) -> Dict[str, Any]:
+        """
+        Verify payment status using both invoice and merchant transaction ID
+        """
+        try:
+            # First check invoice status
+            invoice_status = await self.check_invoice(invoice_id)
+            logger.info(f"Invoice status check response: {invoice_status}")
+
+            if invoice_status.get('error_code') != 0:
+                return {
+                    'success': False,
+                    'error_code': invoice_status.get('error_code'),
+                    'error_note': invoice_status.get('error_note'),
+                    'invoice_status': None
+                }
+
+            status = invoice_status.get('invoice_status')
+
+            # If invoice is deleted
+            if status == -99:
+                return {
+                    'success': False,
+                    'error_code': -99,
+                    'error_note': 'Invoice deleted or expired',
+                    'invoice_status': status
+                }
+
+            # If invoice is paid (status == 2), verify payment status
+            if status == 2:
+                payment_status = await self.check_payment_status_by_merchant_trans_id(
+                    merchant_trans_id
+                )
+                logger.info(f"Payment status check response: {payment_status}")
+
+                if payment_status.get('error_code') == 0 and payment_status.get('payment_status') == 2:
+                    return {
+                        'success': True,
+                        'error_code': 0,
+                        'error_note': 'Payment confirmed',
+                        'payment_id': payment_status.get('payment_id'),
+                        'invoice_status': status
+                    }
+
+            # Payment is still pending or in other state
+            return {
+                'success': False,
+                'error_code': 0,
+                'error_note': invoice_status.get('status_note', 'Payment pending'),
+                'invoice_status': status
+            }
+
+        except Exception as e:
+            logger.error(f"Error verifying payment: {str(e)}", exc_info=True)
+            return {
+                'success': False,
+                'error_code': -1,
+                'error_note': f"Verification error: {str(e)}",
+                'invoice_status': None
+            }
+
+    async def check_payment_status_by_merchant_trans_id(self, merchant_trans_id: str) -> Dict[str, Any]:
+        """Check payment status using merchant transaction ID"""
+        headers = self._generate_auth_header()
+
+        try:
+            response = requests.get(
+                f"{self.base_url}payment/status_by_mti/{self.service_id}/{merchant_trans_id}",
+                headers=headers
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            logger.info(f"Payment status by merchant_trans_id response: {data}")
+
+            return {
+                'error_code': data.get('error_code', -1),
+                'error_note': data.get('error_note', 'Unknown error'),
+                'payment_id': data.get('payment_id'),
+                'payment_status': data.get('payment_status')
+            }
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error checking payment status by merchant_trans_id: {str(e)}")
+            return {
+                'error_code': -1,
+                'error_note': f"Failed to check payment: {str(e)}",
+                'payment_status': None
+            }
+    
     async def check_invoice(self, invoice_id: str) -> Dict[str, Any]:
         """Check Click invoice status"""
         headers = self._generate_auth_header()
@@ -158,3 +248,4 @@ class ClickIntegration:
                 "invoice_status": None,
                 "payment_id": None
             }
+    

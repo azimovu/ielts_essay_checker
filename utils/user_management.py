@@ -391,16 +391,19 @@ async def verify_payment(update: Update, context: ContextTypes.DEFAULT_TYPE, mer
             await send_message(update, "Invalid payment information.")
             return
 
+        logger.info(f"Verifying payment for invoice_id: {invoice_id}, merchant_trans_id: {merchant_trans_id}")
         payment_status = await click.verify_payment(invoice_id, merchant_trans_id)
-        
+        logger.info(f"Payment verification response: {payment_status}")
+
         if payment_status.get('success'):
             # Payment successful
             user_id = update.effective_user.id
-            database.add_purchased_uses(user_id, pending_order['amount'])
+            uses = pending_order.get('amount')  # This should be the number of uses, not the amount
+            database.add_purchased_uses(user_id, uses)
             
             success_message = (
                 f"✅ Payment successful!\n"
-                f"• Added {pending_order['amount']} uses to your account\n"
+                f"• Added {uses} uses to your account\n"
                 f"• Transaction ID: {merchant_trans_id}"
             )
             await send_message(update, success_message)
